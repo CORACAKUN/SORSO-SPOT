@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import AuthPanel from './components/AuthPanel.jsx';
 
 const destinations = [
   {
@@ -105,7 +106,7 @@ const itinerary = [
   },
 ];
 
-function Header() {
+function Header({ onAuthOpen }) {
   return (
     <header className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200/80 bg-paper/90 px-4 py-3 backdrop-blur-xl sm:px-6 lg:flex-nowrap lg:items-center lg:px-16 lg:py-4">
       <a className="flex items-center gap-3 font-extrabold" href="#" aria-label="Sorso Spot home">
@@ -133,12 +134,22 @@ function Header() {
         </a>
       </nav>
 
-      <a
-        className="hidden rounded-lg bg-forest px-4 py-3 text-sm font-extrabold text-white sm:inline-flex"
-        href="#itinerary"
-      >
-        Plan Trip
-      </a>
+      <div className="flex gap-2">
+        <button
+          className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-extrabold text-ink"
+          onClick={() => onAuthOpen('sign-in')}
+          type="button"
+        >
+          Sign in
+        </button>
+        <button
+          className="hidden rounded-lg bg-forest px-4 py-3 text-sm font-extrabold text-white sm:inline-flex"
+          onClick={() => onAuthOpen('sign-up')}
+          type="button"
+        >
+          Sign up
+        </button>
+      </div>
     </header>
   );
 }
@@ -394,9 +405,22 @@ function Footer() {
 }
 
 export default function App() {
+  const [authModal, setAuthModal] = useState({
+    isOpen: false,
+    initialView: 'sign-in',
+  });
+
+  function openAuthModal(initialView) {
+    setAuthModal({ isOpen: true, initialView });
+  }
+
+  function closeAuthModal() {
+    setAuthModal((current) => ({ ...current, isOpen: false }));
+  }
+
   return (
     <>
-      <Header />
+      <Header onAuthOpen={openAuthModal} />
       <main>
         <Hero />
         <QuickLinks />
@@ -407,6 +431,11 @@ export default function App() {
         <Itinerary />
       </main>
       <Footer />
+      <AuthPanel
+        initialView={authModal.initialView}
+        isOpen={authModal.isOpen}
+        onClose={closeAuthModal}
+      />
     </>
   );
 }
