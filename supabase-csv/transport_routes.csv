@@ -1,0 +1,6 @@
+origin,destination,transport_type,estimated_duration,estimated_cost,route_notes,is_published,created_at
+Manila,Sorsogon City,Bus,10 to 14 hours,Varies by bus company,"Overnight buses are common. Add verified terminal and fare details later.",true,2026-08-11T00:00:00+08:00
+Bicol International Airport,Sorsogon City,Van or bus,2 to 3 hours,Varies,"Travel through Legazpi or nearby transport terminals, then continue to Sorsogon.",true,2026-08-11T00:00:00+08:00
+Sorsogon City,Donsol,Van jeepney or private car,1.5 to 2.5 hours,Varies,"Best for whale shark tours and Donsol stays. Confirm current schedules locally.",true,2026-08-11T00:00:00+08:00
+Sorsogon City,Bulusan,Bus van or private car,1.5 to 2.5 hours,Varies,"Useful for Bulusan Lake and nature routes on the east side of the province.",true,2026-08-11T00:00:00+08:00
+Sorsogon City,Matnog,Bus van or private car,2 to 3 hours,Varies,"Continue to Matnog port for island hopping and beach trips.",true,2026-08-11T00:00:00+08:00

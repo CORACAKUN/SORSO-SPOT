@@ -1,0 +1,4 @@
+name,slug,accommodation_type,municipality,address,price_range,amenities,contact_info,image_url,latitude,longitude,is_published,created_at
+Sample City Hotel,sample-city-hotel,Hotel,Sorsogon City,Sorsogon City Center,Budget to mid-range,"Wi-Fi, air conditioning, family rooms",Add official contact later,,12.9742,123.9937,true,2026-08-11T00:00:00+08:00
+Sample Beach Resort,sample-beach-resort,Resort,Matnog,Near Matnog coastal area,Mid-range,"Beach access, island hopping assistance, meals",Add official contact later,,12.5700,124.0840,true,2026-08-11T00:00:00+08:00
+Sample Nature Homestay,sample-nature-homestay,Homestay,Bulusan,Near Bulusan Lake area,Budget,"Local host, nature access, breakfast option",Add official contact later,,12.7660,124.0860,true,2026-08-11T00:00:00+08:00
