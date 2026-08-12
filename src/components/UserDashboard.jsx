@@ -81,7 +81,7 @@ function Panel({ children, eyebrow, title }) {
   );
 }
 
-export default function UserDashboard({ user, onBack }) {
+export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBack }) {
   const [destinations, setDestinations] = useState(fallbackDestinations);
   const [favorites, setFavorites] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -242,6 +242,15 @@ export default function UserDashboard({ user, onBack }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              className="hidden min-h-10 rounded-lg border border-slate-200 px-4 text-sm font-extrabold text-ink sm:inline-flex sm:items-center"
+              onClick={onAdminOpen}
+              type="button"
+            >
+              Admin
+            </button>
+          )}
           <button
             className="hidden min-h-10 rounded-lg border border-slate-200 px-4 text-sm font-extrabold text-ink sm:inline-flex sm:items-center"
             onClick={onBack}
@@ -420,7 +429,7 @@ export default function UserDashboard({ user, onBack }) {
                 </div>
                 <div className="rounded-lg bg-mist p-4">
                   <p className="text-sm font-extrabold text-slate-500">Dashboard access</p>
-                  <p className="mt-1 font-black">Traveler</p>
+                  <p className="mt-1 font-black">{isAdmin ? 'Admin' : 'Traveler'}</p>
                 </div>
               </div>
               <p className="mt-5 text-sm leading-relaxed text-slate-600">
