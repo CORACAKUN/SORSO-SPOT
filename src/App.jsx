@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AuthPanel from './components/AuthPanel.jsx';
+import UserDashboard from './components/UserDashboard.jsx';
+import { supabase } from './lib/supabaseClient';
 
 const destinations = [
   {
@@ -106,7 +108,7 @@ const itinerary = [
   },
 ];
 
-function Header({ onAuthOpen }) {
+function Header({ onAuthOpen, onDashboardOpen, user }) {
   return (
     <header className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200/80 bg-paper/90 px-4 py-3 backdrop-blur-xl sm:px-6 lg:flex-nowrap lg:items-center lg:px-16 lg:py-4">
       <a className="flex items-center gap-3 font-extrabold" href="#" aria-label="Sorso Spot home">
@@ -134,22 +136,32 @@ function Header({ onAuthOpen }) {
         </a>
       </nav>
 
-      <div className="flex gap-2">
+      {user ? (
         <button
-          className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-extrabold text-ink"
-          onClick={() => onAuthOpen('sign-in')}
+          className="rounded-lg bg-forest px-4 py-3 text-sm font-extrabold text-white"
+          onClick={onDashboardOpen}
           type="button"
         >
-          Sign in
+          Dashboard
         </button>
-        <button
-          className="hidden rounded-lg bg-forest px-4 py-3 text-sm font-extrabold text-white sm:inline-flex"
-          onClick={() => onAuthOpen('sign-up')}
-          type="button"
-        >
-          Sign up
-        </button>
-      </div>
+      ) : (
+        <div className="flex gap-2">
+          <button
+            className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-extrabold text-ink"
+            onClick={() => onAuthOpen('sign-in')}
+            type="button"
+          >
+            Sign in
+          </button>
+          <button
+            className="hidden rounded-lg bg-forest px-4 py-3 text-sm font-extrabold text-white sm:inline-flex"
+            onClick={() => onAuthOpen('sign-up')}
+            type="button"
+          >
+            Sign up
+          </button>
+        </div>
+      )}
     </header>
   );
 }
@@ -405,6 +417,8 @@ function Footer() {
 }
 
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [currentView, setCurrentView] = useState('site');
   const [authModal, setAuthModal] = useState({
     isOpen: false,
     initialView: 'sign-in',
@@ -418,9 +432,39 @@ export default function App() {
     setAuthModal((current) => ({ ...current, isOpen: false }));
   }
 
+  useEffect(() => {
+    if (!supabase) return undefined;
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      if (data.session?.user) setCurrentView('dashboard');
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession?.user) {
+        setAuthModal((current) => ({ ...current, isOpen: false }));
+        setCurrentView('dashboard');
+      } else {
+        setCurrentView('site');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (session?.user && currentView === 'dashboard') {
+    return <UserDashboard onBack={() => setCurrentView('site')} user={session.user} />;
+  }
+
   return (
     <>
-      <Header onAuthOpen={openAuthModal} />
+      <Header
+        onAuthOpen={openAuthModal}
+        onDashboardOpen={() => setCurrentView('dashboard')}
+        user={session?.user}
+      />
       <main>
         <Hero />
         <QuickLinks />
