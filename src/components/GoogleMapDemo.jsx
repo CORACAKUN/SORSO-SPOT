@@ -3,8 +3,10 @@ import {
   FaClock,
   FaCoins,
   FaCompass,
+  FaRegBookmark,
   FaMapMarkerAlt,
   FaPhoneAlt,
+  FaBookmark,
   FaRegCalendarAlt,
   FaTimes,
 } from 'react-icons/fa';
@@ -49,7 +51,11 @@ function loadLeaflet() {
   return leafletPromise;
 }
 
-export default function GoogleMapDemo({ destinations }) {
+export default function GoogleMapDemo({
+  destinations,
+  onToggleFavorite,
+  savedDestinationSlugs = new Set(),
+}) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const infoWindowRef = useRef(null);
@@ -61,6 +67,7 @@ export default function GoogleMapDemo({ destinations }) {
   const [isGoogleEnabled, setIsGoogleEnabled] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [error, setError] = useState('');
+  const [favoriteActionSlug, setFavoriteActionSlug] = useState('');
   const validDestinations = destinations.filter((destination) => {
     return Number.isFinite(Number(destination.latitude)) && Number.isFinite(Number(destination.longitude));
   });
@@ -170,6 +177,14 @@ export default function GoogleMapDemo({ destinations }) {
     map.setZoom(Math.max(map.getZoom(), 11));
     infoWindow.setContent(createPopupContent(destination));
     infoWindow.open(map, marker);
+  }
+
+  async function handleToggleFavorite(destinationSlug) {
+    if (!onToggleFavorite || favoriteActionSlug) return;
+
+    setFavoriteActionSlug(destinationSlug);
+    await onToggleFavorite(destinationSlug);
+    setFavoriteActionSlug('');
   }
 
   useEffect(() => {
@@ -348,44 +363,55 @@ export default function GoogleMapDemo({ destinations }) {
     return (
       <aside className="absolute inset-x-3 bottom-3 z-[1000] max-h-[240px] overflow-y-auto rounded-lg bg-white/95 p-3 shadow-travel backdrop-blur md:inset-x-auto md:bottom-auto md:right-4 md:top-4 md:max-h-[calc(100%-32px)] md:w-80">
         <div className="mb-3">
-          <p className="text-xs font-black uppercase text-sea">Explore</p>
           <h3 className="text-xl font-black">Sorsogon spots</h3>
         </div>
 
         <div className="grid gap-2">
           {validDestinations.length ? (
-            validDestinations.map((destination) => (
-              <button
-                className="grid grid-cols-[64px_1fr] gap-3 rounded-lg p-2 text-left hover:bg-mist"
-                key={destination.slug}
-                onClick={() => openDestination(destination)}
-                type="button"
-              >
-                <img
-                  alt=""
-                  className="size-16 rounded-lg object-cover"
-                  src={destination.image_url || fallbackImage}
-                />
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-black">{destination.name}</span>
-                  <span className="mt-1 block truncate text-xs font-bold uppercase text-sea">
-                    {destination.municipality || 'Sorsogon'}
-                  </span>
-                  <span className="mt-1 block truncate text-xs text-slate-500">
-                    {destination.category || 'Tourist spot'}
+            validDestinations.map((destination) => {
+              const isSaved = savedDestinationSlugs.has(destination.slug);
+
+              return (
+                <button
+                  className="grid grid-cols-[64px_1fr_28px] gap-3 rounded-lg p-2 text-left hover:bg-mist"
+                  key={destination.slug}
+                  onClick={() => openDestination(destination)}
+                  type="button"
+                >
+                  <img
+                    alt=""
+                    className="size-16 rounded-lg object-cover"
+                    src={destination.image_url || fallbackImage}
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-black">{destination.name}</span>
+                    <span className="mt-1 block truncate text-xs font-bold uppercase text-sea">
+                      {destination.municipality || 'Sorsogon'}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-slate-500">
+                      {destination.category || 'Tourist spot'}
+                    </span>
+                    <span
+                      className="mt-2 inline-flex text-xs font-black text-sea"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedDestination(destination);
+                      }}
+                    >
+                      View details
+                    </span>
                   </span>
                   <span
-                    className="mt-2 inline-flex text-xs font-black text-sea"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedDestination(destination);
-                    }}
+                    className={`grid size-8 place-items-center rounded-lg ${
+                      isSaved ? 'bg-sun/25 text-ink' : 'bg-mist text-slate-500'
+                    }`}
+                    title={isSaved ? 'Saved' : 'Not saved'}
                   >
-                    View details
+                    {isSaved ? <FaBookmark aria-hidden="true" /> : <FaRegBookmark aria-hidden="true" />}
                   </span>
-                </span>
-              </button>
-            ))
+                </button>
+              );
+            })
           ) : (
             <p className="rounded-lg bg-mist p-3 text-sm font-semibold text-slate-600">
               Add latitude and longitude to destinations to show map markers.
@@ -398,7 +424,7 @@ export default function GoogleMapDemo({ destinations }) {
 
   if (error) {
     return (
-      <div className="grid min-h-[620px] place-items-center rounded-lg border border-dashed border-slate-300 bg-mist p-6 text-center">
+      <div className="grid h-[calc(100svh-170px)] min-h-[480px] place-items-center rounded-lg border border-dashed border-slate-300 bg-mist p-6 text-center">
         <div>
           <p className="text-sm font-black uppercase text-sea">Google Maps demo</p>
           <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-600">{error}</p>
@@ -442,9 +468,12 @@ export default function GoogleMapDemo({ destinations }) {
         },
       ].filter((item) => item.value)
     : [];
+  const isSelectedDestinationSaved = selectedDestination
+    ? savedDestinationSlugs.has(selectedDestination.slug)
+    : false;
 
   return (
-    <div className="relative min-h-[620px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+    <div className="relative z-0 h-[calc(100svh-170px)] min-h-[480px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
       <div
         className={`absolute inset-0 ${provider === 'google' ? 'sorso-google-map' : 'sorso-leaflet-map'}`}
         ref={mapRef}
@@ -463,7 +492,7 @@ export default function GoogleMapDemo({ destinations }) {
             <p className="text-xs font-black uppercase text-sea">Google Maps demo</p>
             <h3 className="mt-1 text-xl font-black">Google map paused</h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              OpenStreetMap is active by default. Load Google only when you need the satellite demo.
+              OSM is active by default. Load Google only when you need the Google demo.
             </p>
             <button
               className="mt-4 min-h-11 rounded-lg bg-ink px-4 font-extrabold text-white"
@@ -476,7 +505,7 @@ export default function GoogleMapDemo({ destinations }) {
         </div>
       )}
 
-      <div className="absolute left-3 top-3 z-[1001] grid gap-2">
+      <div className="absolute left-3 top-3 z-[1001] flex max-w-[calc(100%-24px)] flex-wrap gap-2">
         <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-travel">
           <button
             className={`min-h-10 px-4 text-sm font-extrabold ${
@@ -488,7 +517,7 @@ export default function GoogleMapDemo({ destinations }) {
             }}
             type="button"
           >
-            OpenStreetMap
+            OSM
           </button>
           <button
             className={`min-h-10 px-4 text-sm font-extrabold ${
@@ -505,9 +534,9 @@ export default function GoogleMapDemo({ destinations }) {
         </div>
 
         {provider === 'leaflet' && (
-          <div className="flex w-fit overflow-hidden rounded-lg border border-slate-200 bg-white shadow-travel">
+          <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-travel">
             <button
-              className={`min-h-9 px-3 text-xs font-extrabold ${
+              className={`min-h-10 px-4 text-sm font-extrabold ${
                 leafletStyle === 'map' ? 'bg-sea text-white' : 'text-ink hover:bg-mist'
               }`}
               onClick={() => setLeafletStyle('map')}
@@ -516,7 +545,7 @@ export default function GoogleMapDemo({ destinations }) {
               Map
             </button>
             <button
-              className={`min-h-9 px-3 text-xs font-extrabold ${
+              className={`min-h-10 px-4 text-sm font-extrabold ${
                 leafletStyle === 'satellite' ? 'bg-sea text-white' : 'text-ink hover:bg-mist'
               }`}
               onClick={() => setLeafletStyle('satellite')}
@@ -568,6 +597,30 @@ export default function GoogleMapDemo({ destinations }) {
                 <p className="mt-4 text-sm leading-relaxed text-slate-600">
                   {selectedDestination.description}
                 </p>
+              )}
+
+              {onToggleFavorite && (
+                <button
+                  className={`mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-extrabold ${
+                    isSelectedDestinationSaved
+                      ? 'bg-sun/25 text-ink'
+                      : 'bg-sea text-white'
+                  } disabled:opacity-60`}
+                  disabled={favoriteActionSlug === selectedDestination.slug}
+                  onClick={() => handleToggleFavorite(selectedDestination.slug)}
+                  type="button"
+                >
+                  {isSelectedDestinationSaved ? (
+                    <FaBookmark aria-hidden="true" />
+                  ) : (
+                    <FaRegBookmark aria-hidden="true" />
+                  )}
+                  {favoriteActionSlug === selectedDestination.slug
+                    ? 'Saving...'
+                    : isSelectedDestinationSaved
+                      ? 'Saved place'
+                      : 'Save place'}
+                </button>
               )}
 
               <dl className="mt-6 grid gap-3 sm:grid-cols-2">

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import DashboardPanel from '../../components/shared/DashboardPanel.jsx';
 import EmptyState from '../../components/shared/EmptyState.jsx';
 import { supabase } from '../../lib/supabaseClient';
@@ -30,13 +31,14 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
     isLoading,
     message,
     reviews,
+    savedDestinationSlugs,
     savedDestinations,
     setMessage,
     submissions,
+    toggleFavorite,
   } = useUserDashboardData(user);
 
   const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Traveler';
-  const activeTabLabel = tabs.find((tab) => tab.id === activeTab)?.label || 'Explore';
 
   useEffect(() => {
     const welcomeKey = `sorso-dashboard-welcome-${user.id}`;
@@ -58,7 +60,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
 
   function renderSavedPlaces() {
     return (
-      <DashboardPanel eyebrow="Saved places" title="Your Sorsogon shortlist">
+      <DashboardPanel>
         <div className="grid gap-3">
           {isLoading ? (
             <EmptyState text="Loading saved places..." />
@@ -89,7 +91,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
 
   return (
     <div className="min-h-screen bg-paper text-ink">
-      <header className="sticky top-0 z-20 grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-[1100] grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
         <button className="flex items-center gap-3 font-extrabold" onClick={onBack} type="button">
           <span className="grid size-9 place-items-center rounded-lg bg-sea text-sm font-black text-white">
             SS
@@ -98,7 +100,6 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
         </button>
 
         <nav className="min-w-0 justify-self-center text-center" aria-label="Dashboard location">
-          <p className="truncate text-xs font-black uppercase text-slate-500">{activeTabLabel}</p>
           <h1 className="truncate text-lg font-black sm:text-xl">Traveler dashboard</h1>
         </nav>
 
@@ -142,7 +143,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
             title={isSidebarOpen ? 'Hide sidebar labels' : 'Show sidebar labels'}
             type="button"
           >
-            {isSidebarOpen ? '<' : '>'}
+            {isSidebarOpen ? <FaChevronLeft aria-hidden="true" /> : <FaChevronRight aria-hidden="true" />}
           </button>
 
           <div className="grid gap-2">
@@ -196,13 +197,17 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
           )}
 
           {activeTab === 'explore' && (
-            <DashboardPanel eyebrow="Explore" title="Sorsogon map">
-              <GoogleMapDemo destinations={destinations} />
+            <DashboardPanel>
+              <GoogleMapDemo
+                destinations={destinations}
+                onToggleFavorite={toggleFavorite}
+                savedDestinationSlugs={savedDestinationSlugs}
+              />
             </DashboardPanel>
           )}
 
           {activeTab === 'reviews' && (
-            <DashboardPanel eyebrow="Reviews" title="Your recent reviews">
+            <DashboardPanel>
               <div className="grid gap-3">
                 {isLoading ? (
                   <EmptyState text="Loading reviews..." />
@@ -232,7 +237,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
           )}
 
           {activeTab === 'submissions' && (
-            <DashboardPanel eyebrow="Submissions" title="Listings you submitted">
+            <DashboardPanel>
               <div className="grid gap-3">
                 {isLoading ? (
                   <EmptyState text="Loading submissions..." />
@@ -261,7 +266,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
           )}
 
           {activeTab === 'travel' && (
-            <DashboardPanel eyebrow="Travel plans" title="Starter itinerary">
+            <DashboardPanel>
               <div className="grid gap-3">
                 {tripPlan.map(([label, text]) => (
                   <article className="rounded-lg border border-slate-200 bg-white p-4" key={label}>
@@ -274,7 +279,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
           )}
 
           {activeTab === 'account' && (
-            <DashboardPanel eyebrow="Account" title="Travel profile">
+            <DashboardPanel>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-lg bg-mist p-4">
                   <p className="text-sm font-extrabold text-slate-500">Display name</p>

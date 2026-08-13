@@ -100,6 +100,10 @@ export function useUserDashboardData(user) {
       bestTime: destination?.best_time || 'Year-round',
     };
   });
+  const savedDestinationSlugs = useMemo(
+    () => new Set(favorites.map((favorite) => favorite.destination_slug)),
+    [favorites],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -166,13 +170,56 @@ export function useUserDashboardData(user) {
     };
   }, [user.email]);
 
+  async function toggleFavorite(destinationSlug) {
+    if (!supabase || !destinationSlug) return;
+
+    setMessage('');
+    const isSaved = savedDestinationSlugs.has(destinationSlug);
+
+    if (isSaved) {
+      const { error } = await supabase
+        .from('favorites')
+        .delete()
+        .eq('user_email', user.email)
+        .eq('destination_slug', destinationSlug);
+
+      if (error) {
+        setMessage(`Unable to remove saved place: ${error.message}`);
+        return;
+      }
+
+      setFavorites((current) =>
+        current.filter((favorite) => favorite.destination_slug !== destinationSlug),
+      );
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('favorites')
+      .insert({
+        user_email: user.email,
+        destination_slug: destinationSlug,
+      })
+      .select('destination_slug, created_at')
+      .single();
+
+    if (error) {
+      setMessage(`Unable to save place: ${error.message}`);
+      return;
+    }
+
+    setFavorites((current) => [data, ...current]);
+  }
+
   return {
     destinations,
     isLoading,
     message,
     reviews,
+    savedDestinationSlugs,
     savedDestinations,
     setMessage,
     submissions,
+    toggleFavorite,
   };
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import DestinationManager from './components/DestinationManager.jsx';
 import ShellCard from '../../components/shared/ShellCard.jsx';
 import { supabase } from '../../lib/supabaseClient';
@@ -92,8 +93,6 @@ export default function AdminDashboard({ user, onBack, onTravelerOpen }) {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [message, setMessage] = useState('');
 
-  const activeTabLabel = adminTabs.find((tab) => tab.id === activeTab)?.label || 'Overview';
-
   async function handleSignOut() {
     if (!supabase) return;
 
@@ -106,7 +105,7 @@ export default function AdminDashboard({ user, onBack, onTravelerOpen }) {
 
   return (
     <div className="min-h-screen bg-paper text-ink">
-      <header className="sticky top-0 z-20 grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-[1100] grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
         <button className="flex items-center gap-3 font-extrabold" onClick={onBack} type="button">
           <span className="grid size-9 place-items-center rounded-lg bg-ink text-sm font-black text-white">
             AD
@@ -115,7 +114,6 @@ export default function AdminDashboard({ user, onBack, onTravelerOpen }) {
         </button>
 
         <nav className="min-w-0 justify-self-center text-center" aria-label="Admin location">
-          <p className="truncate text-xs font-black uppercase text-slate-500">{activeTabLabel}</p>
           <h1 className="truncate text-lg font-black sm:text-xl">Admin dashboard</h1>
         </nav>
 
@@ -157,7 +155,7 @@ export default function AdminDashboard({ user, onBack, onTravelerOpen }) {
             title={isSidebarOpen ? 'Hide sidebar labels' : 'Show sidebar labels'}
             type="button"
           >
-            {isSidebarOpen ? '<' : '>'}
+            {isSidebarOpen ? <FaChevronLeft aria-hidden="true" /> : <FaChevronRight aria-hidden="true" />}
           </button>
 
           <div className="grid gap-2">
