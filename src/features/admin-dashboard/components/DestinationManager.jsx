@@ -7,10 +7,17 @@ const emptyDestinationForm = {
   slug: '',
   municipality: '',
   category: '',
+  description: '',
+  address: '',
   best_time: '',
+  opening_hours: '',
+  entrance_fee: '',
+  contact_info: '',
+  travel_tips: '',
   latitude: '',
   longitude: '',
   image_url: '',
+  is_featured: false,
   is_published: true,
 };
 
@@ -28,10 +35,17 @@ function normalizeDestinationPayload(form) {
     slug: createSlug(form.slug || form.name),
     municipality: form.municipality.trim(),
     category: form.category.trim(),
+    description: form.description.trim() || null,
+    address: form.address.trim() || null,
     best_time: form.best_time.trim() || null,
+    opening_hours: form.opening_hours.trim() || null,
+    entrance_fee: form.entrance_fee.trim() || null,
+    contact_info: form.contact_info.trim() || null,
+    travel_tips: form.travel_tips.trim() || null,
     latitude: form.latitude === '' ? null : Number(form.latitude),
     longitude: form.longitude === '' ? null : Number(form.longitude),
     image_url: form.image_url.trim() || null,
+    is_featured: Boolean(form.is_featured),
     is_published: Boolean(form.is_published),
   };
 }
@@ -57,6 +71,21 @@ function TextField({
         required={required}
         step={step}
         type={type}
+        value={value}
+      />
+    </label>
+  );
+}
+
+function TextAreaField({ label, name, onChange, placeholder, value }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-sm font-extrabold text-slate-500">{label}</span>
+      <textarea
+        className="min-h-28 resize-y rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm text-ink outline-none transition focus:border-sea focus:ring-2 focus:ring-sea/20"
+        name={name}
+        onChange={onChange}
+        placeholder={placeholder}
         value={value}
       />
     </label>
@@ -95,7 +124,9 @@ export default function DestinationManager() {
 
     const { data, error } = await supabase
       .from('destinations')
-      .select('id, name, slug, municipality, category, best_time, latitude, longitude, image_url, is_published')
+      .select(
+        'id, name, slug, municipality, category, description, address, best_time, opening_hours, entrance_fee, contact_info, travel_tips, latitude, longitude, image_url, is_featured, is_published',
+      )
       .order('name', { ascending: true });
 
     if (error) {
@@ -128,10 +159,17 @@ export default function DestinationManager() {
       slug: destination.slug || '',
       municipality: destination.municipality || '',
       category: destination.category || '',
+      description: destination.description || '',
+      address: destination.address || '',
       best_time: destination.best_time || '',
+      opening_hours: destination.opening_hours || '',
+      entrance_fee: destination.entrance_fee || '',
+      contact_info: destination.contact_info || '',
+      travel_tips: destination.travel_tips || '',
       latitude: destination.latitude ?? '',
       longitude: destination.longitude ?? '',
       image_url: destination.image_url || '',
+      is_featured: Boolean(destination.is_featured),
       is_published: Boolean(destination.is_published),
     });
     setMessage('');
@@ -261,15 +299,22 @@ export default function DestinationManager() {
                   </div>
                   <p className="text-sm font-semibold text-slate-700">{destination.municipality}</p>
                   <p className="text-sm text-slate-600">{destination.category}</p>
-                  <span
-                    className={`w-fit rounded-lg px-3 py-2 text-xs font-black ${
-                      destination.is_published
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-slate-100 text-slate-500'
-                    }`}
-                  >
-                    {destination.is_published ? 'Published' : 'Draft'}
-                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <span
+                      className={`w-fit rounded-lg px-3 py-2 text-xs font-black ${
+                        destination.is_published
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {destination.is_published ? 'Published' : 'Draft'}
+                    </span>
+                    {destination.is_featured && (
+                      <span className="w-fit rounded-lg bg-sun/20 px-3 py-2 text-xs font-black text-ink">
+                        Featured
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <button
                       className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm font-extrabold text-ink"
@@ -347,6 +392,50 @@ export default function DestinationManager() {
             placeholder="November to May"
             value={form.best_time}
           />
+          <TextAreaField
+            label="Description"
+            name="description"
+            onChange={handleFieldChange}
+            placeholder="Short tourist-friendly overview of the place."
+            value={form.description}
+          />
+          <TextField
+            label="Address"
+            name="address"
+            onChange={handleFieldChange}
+            placeholder="Barangay or street, municipality"
+            value={form.address}
+          />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+            <TextField
+              label="Opening hours"
+              name="opening_hours"
+              onChange={handleFieldChange}
+              placeholder="7:00 AM - 5:00 PM"
+              value={form.opening_hours}
+            />
+            <TextField
+              label="Entrance fee"
+              name="entrance_fee"
+              onChange={handleFieldChange}
+              placeholder="Free / PHP 50"
+              value={form.entrance_fee}
+            />
+          </div>
+          <TextField
+            label="Contact info"
+            name="contact_info"
+            onChange={handleFieldChange}
+            placeholder="Phone, Facebook page, or tourism office"
+            value={form.contact_info}
+          />
+          <TextAreaField
+            label="Travel tips"
+            name="travel_tips"
+            onChange={handleFieldChange}
+            placeholder="What to bring, best route, local reminders."
+            value={form.travel_tips}
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField
               label="Latitude"
@@ -384,6 +473,16 @@ export default function DestinationManager() {
               type="checkbox"
             />
             Show on traveler map
+          </label>
+          <label className="flex min-h-11 items-center gap-3 rounded-lg bg-mist px-3 text-sm font-extrabold text-ink">
+            <input
+              checked={form.is_featured}
+              className="size-4 accent-teal-700"
+              name="is_featured"
+              onChange={handleFieldChange}
+              type="checkbox"
+            />
+            Mark as featured
           </label>
           <div className="flex flex-wrap gap-2">
             <button
