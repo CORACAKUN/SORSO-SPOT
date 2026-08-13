@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import AdminDashboard from './components/AdminDashboard.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
-import UserDashboard from './components/UserDashboard.jsx';
+import AdminDashboard from './features/admin-dashboard/AdminDashboard.jsx';
+import UserDashboard from './features/user-dashboard/UserDashboard.jsx';
 import { supabase } from './lib/supabaseClient';
 
 const destinations = [

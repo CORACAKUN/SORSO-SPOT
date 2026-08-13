@@ -1,11 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 const sorsogonCenter = { lat: 12.9731, lng: 123.9935 };
+const sorsogonOverviewZoom = 10;
+const destinationZoom = 14;
+const zoomOutAnimationDuration = 1.3;
+const zoomInAnimationDuration = 2.05;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const fallbackImage =
   'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=900&q=80';
 
 let googleMapsPromise;
+let leafletPromise;
 
 function loadGoogleMaps() {
   if (window.google?.maps) return Promise.resolve(window.google.maps);
@@ -25,11 +30,26 @@ function loadGoogleMaps() {
   return googleMapsPromise;
 }
 
+function loadLeaflet() {
+  if (!leafletPromise) {
+    leafletPromise = Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')]).then(
+      ([leafletModule]) => leafletModule.default,
+    );
+  }
+
+  return leafletPromise;
+}
+
 export default function GoogleMapDemo({ destinations }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const infoWindowRef = useRef(null);
   const markerRefs = useRef({});
+  const leafletMapRef = useRef(null);
+  const leafletMarkerRefs = useRef({});
+  const [provider, setProvider] = useState('leaflet');
+  const [leafletStyle, setLeafletStyle] = useState('satellite');
+  const [isGoogleEnabled, setIsGoogleEnabled] = useState(false);
   const [error, setError] = useState('');
   const validDestinations = destinations.filter((destination) => {
     return Number.isFinite(Number(destination.latitude)) && Number.isFinite(Number(destination.longitude));
@@ -72,6 +92,45 @@ export default function GoogleMapDemo({ destinations }) {
   }
 
   function openDestination(destination) {
+    if (provider === 'leaflet') {
+      const map = leafletMapRef.current;
+      const marker = leafletMarkerRefs.current[destination.slug];
+
+      if (!map || !marker) return;
+
+      const position = [Number(destination.latitude), Number(destination.longitude)];
+      map.closePopup();
+      marker.bindPopup(createPopupContent(destination), {
+        closeButton: true,
+        maxWidth: 280,
+        minWidth: 260,
+      });
+
+      const openPopup = () => marker.openPopup();
+      const shouldZoomOutFirst = map.getZoom() > sorsogonOverviewZoom + 1;
+
+      if (shouldZoomOutFirst) {
+        map.once('moveend', () => {
+          map.once('moveend', openPopup);
+          map.flyTo(position, destinationZoom, {
+            animate: true,
+            duration: zoomInAnimationDuration,
+          });
+        });
+        map.flyTo([sorsogonCenter.lat, sorsogonCenter.lng], sorsogonOverviewZoom, {
+          animate: true,
+          duration: zoomOutAnimationDuration,
+        });
+      } else {
+        map.once('moveend', openPopup);
+        map.flyTo(position, destinationZoom, {
+          animate: true,
+          duration: zoomInAnimationDuration,
+        });
+      }
+      return;
+    }
+
     const map = mapInstanceRef.current;
     const infoWindow = infoWindowRef.current;
     const marker = markerRefs.current[destination.slug];
@@ -92,7 +151,93 @@ export default function GoogleMapDemo({ destinations }) {
   useEffect(() => {
     let isMounted = true;
 
+    async function initializeLeafletMap() {
+      if (provider !== 'leaflet' || !mapRef.current) return;
+
+      setError('');
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+
+      const leaflet = await loadLeaflet();
+      if (!isMounted || !mapRef.current) return;
+
+      mapRef.current.innerHTML = '';
+
+      const map = leaflet.map(mapRef.current, {
+        center: [sorsogonCenter.lat, sorsogonCenter.lng],
+        zoom: sorsogonOverviewZoom,
+        zoomControl: false,
+      });
+
+      leaflet.control.zoom({ position: 'bottomleft' }).addTo(map);
+      const tileLayer =
+        leafletStyle === 'satellite'
+          ? leaflet.tileLayer(
+              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+              {
+                attribution:
+                  'Tiles &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+                maxZoom: 19,
+              },
+            )
+          : leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; OpenStreetMap contributors',
+              maxZoom: 19,
+            });
+
+      tileLayer.addTo(map);
+
+      leafletMapRef.current = map;
+      leafletMarkerRefs.current = {};
+
+      const markerIcon = leaflet.divIcon({
+        className: '',
+        html:
+          '<span style="display:block;width:18px;height:18px;border-radius:999px;background:#d96945;border:3px solid #fff;box-shadow:0 6px 16px rgba(19,32,31,.28);"></span>',
+        iconAnchor: [9, 9],
+        iconSize: [18, 18],
+        popupAnchor: [0, -8],
+      });
+
+      validDestinations.forEach((destination) => {
+        const marker = leaflet
+          .marker([Number(destination.latitude), Number(destination.longitude)], {
+            icon: markerIcon,
+            title: destination.name,
+          })
+          .addTo(map);
+
+        marker.bindPopup(createPopupContent(destination), {
+          closeButton: true,
+          maxWidth: 280,
+          minWidth: 260,
+        });
+        leafletMarkerRefs.current[destination.slug] = marker;
+      });
+
+      window.setTimeout(() => map.invalidateSize(), 0);
+    }
+
+    initializeLeafletMap();
+
+    return () => {
+      isMounted = false;
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+        leafletMarkerRefs.current = {};
+      }
+    };
+  }, [destinations, leafletStyle, provider]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     async function initializeMap() {
+      if (provider !== 'google' || !isGoogleEnabled) return;
+
       if (!googleMapsApiKey) {
         setError('Add VITE_GOOGLE_MAPS_API_KEY to .env to enable the Google Maps demo.');
         return;
@@ -101,6 +246,8 @@ export default function GoogleMapDemo({ destinations }) {
       try {
         const maps = await loadGoogleMaps();
         if (!isMounted || !mapRef.current) return;
+
+        mapRef.current.innerHTML = '';
 
         const map = new maps.Map(mapRef.current, {
           center: sorsogonCenter,
@@ -171,24 +318,11 @@ export default function GoogleMapDemo({ destinations }) {
     return () => {
       isMounted = false;
     };
-  }, [destinations]);
+  }, [destinations, isGoogleEnabled, provider]);
 
-  if (error) {
+  function renderDestinationList() {
     return (
-      <div className="grid min-h-[620px] place-items-center rounded-lg border border-dashed border-slate-300 bg-mist p-6 text-center">
-        <div>
-          <p className="text-sm font-black uppercase text-sea">Google Maps demo</p>
-          <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-600">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative min-h-[620px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-      <div className="sorso-google-map absolute inset-0" ref={mapRef} />
-
-      <aside className="absolute inset-x-3 bottom-3 z-10 max-h-[240px] overflow-y-auto rounded-lg bg-white/95 p-3 shadow-travel backdrop-blur md:inset-x-auto md:bottom-auto md:right-4 md:top-4 md:max-h-[calc(100%-32px)] md:w-80">
+      <aside className="absolute inset-x-3 bottom-3 z-[1000] max-h-[240px] overflow-y-auto rounded-lg bg-white/95 p-3 shadow-travel backdrop-blur md:inset-x-auto md:bottom-auto md:right-4 md:top-4 md:max-h-[calc(100%-32px)] md:w-80">
         <div className="mb-3">
           <p className="text-xs font-black uppercase text-sea">Explore</p>
           <h3 className="text-xl font-black">Sorsogon spots</h3>
@@ -226,6 +360,108 @@ export default function GoogleMapDemo({ destinations }) {
           )}
         </div>
       </aside>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="grid min-h-[620px] place-items-center rounded-lg border border-dashed border-slate-300 bg-mist p-6 text-center">
+        <div>
+          <p className="text-sm font-black uppercase text-sea">Google Maps demo</p>
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const isGooglePaused = provider === 'google' && !isGoogleEnabled;
+
+  return (
+    <div className="relative min-h-[620px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+      <div
+        className={`absolute inset-0 ${provider === 'google' ? 'sorso-google-map' : 'sorso-leaflet-map'}`}
+        ref={mapRef}
+      />
+
+      {isGooglePaused && (
+        <div className="absolute inset-0 z-[5] bg-[linear-gradient(135deg,#e8f2ec,#f9fbf6_45%,#d7e6ef)]">
+          <div className="absolute inset-0 opacity-70">
+            <div className="absolute left-[10%] top-[12%] h-40 w-56 rounded-[45%] bg-sea/15" />
+            <div className="absolute bottom-[16%] left-[28%] h-56 w-72 rounded-[48%] bg-forest/15" />
+            <div className="absolute right-[22%] top-[18%] h-72 w-64 rounded-[45%] bg-sun/20" />
+            <div className="absolute bottom-[10%] right-[8%] h-44 w-56 rounded-[45%] bg-coral/15" />
+          </div>
+
+          <div className="absolute left-4 top-20 max-w-sm rounded-lg bg-white/95 p-4 shadow-travel backdrop-blur">
+            <p className="text-xs font-black uppercase text-sea">Google Maps demo</p>
+            <h3 className="mt-1 text-xl font-black">Google map paused</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              OpenStreetMap is active by default. Load Google only when you need the satellite demo.
+            </p>
+            <button
+              className="mt-4 min-h-11 rounded-lg bg-ink px-4 font-extrabold text-white"
+              onClick={() => setIsGoogleEnabled(true)}
+              type="button"
+            >
+              Load Google Map
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="absolute left-3 top-3 z-[1001] grid gap-2">
+        <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-travel">
+          <button
+            className={`min-h-10 px-4 text-sm font-extrabold ${
+              provider === 'leaflet' ? 'bg-ink text-white' : 'text-ink hover:bg-mist'
+            }`}
+            onClick={() => {
+              setProvider('leaflet');
+              setError('');
+            }}
+            type="button"
+          >
+            OpenStreetMap
+          </button>
+          <button
+            className={`min-h-10 px-4 text-sm font-extrabold ${
+              provider === 'google' ? 'bg-ink text-white' : 'text-ink hover:bg-mist'
+            }`}
+            onClick={() => {
+              setProvider('google');
+              setError('');
+            }}
+            type="button"
+          >
+            Google
+          </button>
+        </div>
+
+        {provider === 'leaflet' && (
+          <div className="flex w-fit overflow-hidden rounded-lg border border-slate-200 bg-white shadow-travel">
+            <button
+              className={`min-h-9 px-3 text-xs font-extrabold ${
+                leafletStyle === 'map' ? 'bg-sea text-white' : 'text-ink hover:bg-mist'
+              }`}
+              onClick={() => setLeafletStyle('map')}
+              type="button"
+            >
+              Map
+            </button>
+            <button
+              className={`min-h-9 px-3 text-xs font-extrabold ${
+                leafletStyle === 'satellite' ? 'bg-sea text-white' : 'text-ink hover:bg-mist'
+              }`}
+              onClick={() => setLeafletStyle('satellite')}
+              type="button"
+            >
+              Satellite
+            </button>
+          </div>
+        )}
+      </div>
+
+      {renderDestinationList()}
     </div>
   );
 }
