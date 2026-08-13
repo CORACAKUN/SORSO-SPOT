@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AdminDashboard from './components/AdminDashboard.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import UserDashboard from './components/UserDashboard.jsx';
@@ -430,6 +430,7 @@ function Footer() {
 
 export default function App() {
   const [session, setSession] = useState(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const [currentView, setCurrentView] = useState('site');
@@ -437,6 +438,15 @@ export default function App() {
     isOpen: false,
     initialView: 'sign-in',
   });
+  const signedInUserId = session?.user?.id || null;
+  const signedInUserEmail = session?.user?.email || '';
+  const adminEmails = useMemo(
+    () =>
+      [...(import.meta.env.VITE_ADMIN_EMAILS || '').split(','), 'admin@test.com']
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    [],
+  );
 
   function openAuthModal(initialView) {
     setAuthModal({ isOpen: true, initialView });
@@ -447,19 +457,29 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!supabase) return undefined;
+    if (!supabase) {
+      setIsAuthReady(true);
+      return undefined;
+    }
+
+    let isMounted = true;
 
     supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return;
       setSession(data.session);
-      if (data.session?.user) setIsCheckingAccess(true);
+      if (data.session?.user) {
+        setCurrentView((current) => (current === 'site' ? 'dashboard' : current));
+      }
+      setIsAuthReady(true);
     });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setIsAuthReady(true);
       setSession(nextSession);
       if (nextSession?.user) {
         setAuthModal((current) => ({ ...current, isOpen: false }));
-        setIsCheckingAccess(true);
+        setCurrentView((current) => (current === 'site' ? 'dashboard' : current));
       } else {
         setIsAdmin(false);
         setIsCheckingAccess(false);
@@ -467,7 +487,10 @@ export default function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -487,12 +510,6 @@ export default function App() {
       const metadataRole = String(user.user_metadata?.role || user.app_metadata?.role || '')
         .trim()
         .toLowerCase();
-      const adminEmails = [
-        ...(import.meta.env.VITE_ADMIN_EMAILS || '').split(','),
-        'admin@test.com',
-      ]
-        .map((email) => email.trim().toLowerCase())
-        .filter(Boolean);
       const userEmail = user.email?.toLowerCase();
 
       if (metadataRole === 'admin' || adminEmails.includes(userEmail)) {
@@ -530,15 +547,16 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [session]);
+  }, [adminEmails, signedInUserEmail, signedInUserId]);
 
-  if (session?.user && isCheckingAccess) {
+  if (!isAuthReady) {
     return (
-      <div className="grid min-h-screen place-items-center bg-paper px-4 text-center text-ink">
-        <div>
-          <p className="text-xs font-black uppercase text-sea">Account</p>
-          <h1 className="mt-2 text-2xl font-black">Checking dashboard access...</h1>
-        </div>
+      <div className="grid min-h-screen place-items-center bg-paper px-4 text-ink">
+        <div
+          aria-label="Loading account"
+          className="h-12 w-12 animate-spin rounded-full border-4 border-mist border-t-sea border-r-sun"
+          role="status"
+        />
       </div>
     );
   }
