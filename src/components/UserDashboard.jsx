@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import GoogleMapDemo from './GoogleMapDemo.jsx';
 
 const fallbackDestinations = [
   {
@@ -8,6 +9,10 @@ const fallbackDestinations = [
     municipality: 'Donsol',
     category: 'Wildlife',
     best_time: 'November to June',
+    latitude: 12.9055,
+    longitude: 123.5947,
+    image_url:
+      'https://images.unsplash.com/photo-1540202404-b2979d19ed37?auto=format&fit=crop&w=1200&q=80',
   },
   {
     name: 'Bulusan Lake',
@@ -15,6 +20,9 @@ const fallbackDestinations = [
     municipality: 'Bulusan',
     category: 'Nature',
     best_time: 'November to May',
+    latitude: 12.7669,
+    longitude: 124.0871,
+    image_url: 'https://upload.wikimedia.org/wikipedia/commons/e/e5/Kayaking_at_Bulusan_Lake.jpg',
   },
   {
     name: 'Subic Beach',
@@ -22,6 +30,21 @@ const fallbackDestinations = [
     municipality: 'Matnog',
     category: 'Beach',
     best_time: 'Dry season',
+    latitude: 12.5708,
+    longitude: 124.0858,
+    image_url:
+      'https://i0.wp.com/joansfootprints.com/wp-content/uploads/2024/08/grouphie-4-1-1024x576.jpg?resize=1024%2C576&ssl=1',
+  },
+  {
+    name: 'Sorsogon City Baywalk',
+    slug: 'sorsogon-city-baywalk',
+    municipality: 'Sorsogon City',
+    category: 'City Attraction',
+    best_time: 'Year-round',
+    latitude: 12.9731,
+    longitude: 123.9935,
+    image_url:
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
   },
 ];
 
@@ -48,15 +71,6 @@ function EmptyState({ text }) {
   );
 }
 
-function StatPill({ label, value }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-      <p className="text-xs font-black uppercase text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-black text-ink">{value}</p>
-    </div>
-  );
-}
-
 function Panel({ children, eyebrow, title }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -67,7 +81,7 @@ function Panel({ children, eyebrow, title }) {
   );
 }
 
-export default function UserDashboard({ user, onBack }) {
+export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBack }) {
   const [destinations, setDestinations] = useState(fallbackDestinations);
   const [favorites, setFavorites] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -100,12 +114,6 @@ export default function UserDashboard({ user, onBack }) {
     };
   });
 
-  const recommendedDestinations = destinations
-    .filter((destination) => {
-      return !favorites.some((favorite) => favorite.destination_slug === destination.slug);
-    })
-    .slice(0, 3);
-
   useEffect(() => {
     const welcomeKey = `sorso-dashboard-welcome-${user.id}`;
     if (!window.sessionStorage.getItem(welcomeKey)) {
@@ -130,7 +138,7 @@ export default function UserDashboard({ user, onBack }) {
         await Promise.all([
           supabase
             .from('destinations')
-            .select('name, slug, municipality, category, best_time')
+            .select('name, slug, municipality, category, best_time, latitude, longitude, image_url')
             .eq('is_published', true)
             .order('name', { ascending: true }),
           supabase
@@ -234,6 +242,15 @@ export default function UserDashboard({ user, onBack }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              className="hidden min-h-10 rounded-lg border border-slate-200 px-4 text-sm font-extrabold text-ink sm:inline-flex sm:items-center"
+              onClick={onAdminOpen}
+              type="button"
+            >
+              Admin
+            </button>
+          )}
           <button
             className="hidden min-h-10 rounded-lg border border-slate-200 px-4 text-sm font-extrabold text-ink sm:inline-flex sm:items-center"
             onClick={onBack}
@@ -318,49 +335,9 @@ export default function UserDashboard({ user, onBack }) {
           )}
 
           {activeTab === 'explore' && (
-            <div className="grid gap-6">
-              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <StatPill label="Saved places" value={isLoading ? '-' : savedDestinations.length} />
-                <StatPill label="Reviews" value={isLoading ? '-' : reviews.length} />
-                <StatPill label="Submissions" value={isLoading ? '-' : submissions.length} />
-                <StatPill label="Explore list" value={isLoading ? '-' : destinations.length} />
-              </section>
-
-              <div className="grid gap-6 xl:grid-cols-[1.15fr_.85fr]">
-                <Panel eyebrow="Explore" title="Places to explore next">
-                  <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
-                    {recommendedDestinations.length ? (
-                      recommendedDestinations.map((destination) => (
-                        <article className="rounded-lg bg-mist p-4" key={destination.slug}>
-                          <p className="text-sm font-black uppercase text-sea">
-                            {destination.municipality}
-                          </p>
-                          <h3 className="mt-2 font-black">{destination.name}</h3>
-                          <p className="mt-2 text-sm text-slate-600">
-                            {destination.category} - Best time:{' '}
-                            {destination.best_time || 'Year-round'}
-                          </p>
-                        </article>
-                      ))
-                    ) : (
-                      <EmptyState text="You have saved all available starter destinations." />
-                    )}
-                  </div>
-                </Panel>
-
-                <Panel eyebrow="Map" title="Route map">
-                  <div className="grid min-h-[320px] place-items-center rounded-lg border border-dashed border-slate-300 bg-mist p-6 text-center">
-                    <div>
-                      <p className="text-sm font-black uppercase text-sea">Map API pending</p>
-                      <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-600">
-                        This space is reserved for the Sorsogon map once you choose between
-                        Google Maps, Mapbox, Leaflet, or another provider.
-                      </p>
-                    </div>
-                  </div>
-                </Panel>
-              </div>
-            </div>
+            <Panel eyebrow="Explore" title="Sorsogon map">
+              <GoogleMapDemo destinations={destinations} />
+            </Panel>
           )}
 
           {activeTab === 'reviews' && (
@@ -452,7 +429,7 @@ export default function UserDashboard({ user, onBack }) {
                 </div>
                 <div className="rounded-lg bg-mist p-4">
                   <p className="text-sm font-extrabold text-slate-500">Dashboard access</p>
-                  <p className="mt-1 font-black">Traveler</p>
+                  <p className="mt-1 font-black">{isAdmin ? 'Admin' : 'Traveler'}</p>
                 </div>
               </div>
               <p className="mt-5 text-sm leading-relaxed text-slate-600">

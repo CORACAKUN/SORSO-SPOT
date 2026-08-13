@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import AdminDashboard from './components/AdminDashboard.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import UserDashboard from './components/UserDashboard.jsx';
 import { supabase } from './lib/supabaseClient';
@@ -108,7 +109,7 @@ const itinerary = [
   },
 ];
 
-function Header({ onAuthOpen, onDashboardOpen, user }) {
+function Header({ isAdmin, onAdminOpen, onAuthOpen, onDashboardOpen, user }) {
   return (
     <header className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200/80 bg-paper/90 px-4 py-3 backdrop-blur-xl sm:px-6 lg:flex-nowrap lg:items-center lg:px-16 lg:py-4">
       <a className="flex items-center gap-3 font-extrabold" href="#" aria-label="Sorso Spot home">
@@ -137,13 +138,24 @@ function Header({ onAuthOpen, onDashboardOpen, user }) {
       </nav>
 
       {user ? (
-        <button
-          className="rounded-lg bg-forest px-4 py-3 text-sm font-extrabold text-white"
-          onClick={onDashboardOpen}
-          type="button"
-        >
-          Dashboard
-        </button>
+        <div className="flex gap-2">
+          {isAdmin && (
+            <button
+              className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-extrabold text-ink"
+              onClick={onAdminOpen}
+              type="button"
+            >
+              Admin
+            </button>
+          )}
+          <button
+            className="rounded-lg bg-forest px-4 py-3 text-sm font-extrabold text-white"
+            onClick={onDashboardOpen}
+            type="button"
+          >
+            Dashboard
+          </button>
+        </div>
       ) : (
         <div className="flex gap-2">
           <button
@@ -418,11 +430,23 @@ function Footer() {
 
 export default function App() {
   const [session, setSession] = useState(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const [currentView, setCurrentView] = useState('site');
   const [authModal, setAuthModal] = useState({
     isOpen: false,
     initialView: 'sign-in',
   });
+  const signedInUserId = session?.user?.id || null;
+  const signedInUserEmail = session?.user?.email || '';
+  const adminEmails = useMemo(
+    () =>
+      [...(import.meta.env.VITE_ADMIN_EMAILS || '').split(','), 'admin@test.com']
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    [],
+  );
 
   function openAuthModal(initialView) {
     setAuthModal({ isOpen: true, initialView });
@@ -433,34 +457,136 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!supabase) return undefined;
+    if (!supabase) {
+      setIsAuthReady(true);
+      return undefined;
+    }
+
+    let isMounted = true;
 
     supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return;
       setSession(data.session);
-      if (data.session?.user) setCurrentView('dashboard');
+      if (data.session?.user) {
+        setCurrentView((current) => (current === 'site' ? 'dashboard' : current));
+      }
+      setIsAuthReady(true);
     });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setIsAuthReady(true);
       setSession(nextSession);
       if (nextSession?.user) {
         setAuthModal((current) => ({ ...current, isOpen: false }));
-        setCurrentView('dashboard');
+        setCurrentView((current) => (current === 'site' ? 'dashboard' : current));
       } else {
+        setIsAdmin(false);
+        setIsCheckingAccess(false);
         setCurrentView('site');
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAdminStatus() {
+      const user = session?.user;
+
+      if (!user || !supabase) {
+        setIsAdmin(false);
+        setIsCheckingAccess(false);
+        return;
+      }
+
+      setIsCheckingAccess(true);
+
+      const metadataRole = String(user.user_metadata?.role || user.app_metadata?.role || '')
+        .trim()
+        .toLowerCase();
+      const userEmail = user.email?.toLowerCase();
+
+      if (metadataRole === 'admin' || adminEmails.includes(userEmail)) {
+        if (isMounted) {
+          setIsAdmin(true);
+          setIsCheckingAccess(false);
+          setCurrentView((current) => (current === 'site' || current === 'dashboard' ? 'admin' : current));
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (isMounted) {
+        const nextIsAdmin = String(data?.role || '').trim().toLowerCase() === 'admin';
+        setIsAdmin(nextIsAdmin);
+        setIsCheckingAccess(false);
+        if (nextIsAdmin) {
+          setCurrentView((current) => (current === 'site' || current === 'dashboard' ? 'admin' : current));
+        } else {
+          setCurrentView((current) => (current === 'site' ? 'dashboard' : current));
+        }
+        if (error) {
+          console.warn('Unable to check admin profile role:', error.message);
+        }
+      }
+    }
+
+    loadAdminStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [adminEmails, signedInUserEmail, signedInUserId]);
+
+  if (!isAuthReady) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-paper px-4 text-ink">
+        <div
+          aria-label="Loading account"
+          className="h-12 w-12 animate-spin rounded-full border-4 border-mist border-t-sea border-r-sun"
+          role="status"
+        />
+      </div>
+    );
+  }
+
+  if (session?.user && currentView === 'admin' && isAdmin) {
+    return (
+      <AdminDashboard
+        onBack={() => setCurrentView('site')}
+        onTravelerOpen={() => setCurrentView('dashboard')}
+        user={session.user}
+      />
+    );
+  }
+
   if (session?.user && currentView === 'dashboard') {
-    return <UserDashboard onBack={() => setCurrentView('site')} user={session.user} />;
+    return (
+      <UserDashboard
+        isAdmin={isAdmin}
+        onAdminOpen={() => setCurrentView('admin')}
+        onBack={() => setCurrentView('site')}
+        user={session.user}
+      />
+    );
   }
 
   return (
     <>
       <Header
+        isAdmin={isAdmin}
+        onAdminOpen={() => setCurrentView('admin')}
         onAuthOpen={openAuthModal}
         onDashboardOpen={() => setCurrentView('dashboard')}
         user={session?.user}

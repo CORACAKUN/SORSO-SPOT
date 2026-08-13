@@ -14,3 +14,54 @@ body {
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
 }
+
+.sorso-google-map .gm-style .gm-style-iw-c {
+  max-height: none !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  overflow: visible !important;
+}
+
+.sorso-google-map .gm-style .gm-style-iw-chr {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  z-index: 2 !important;
+  height: 0 !important;
+}
+
+.sorso-google-map .gm-style .gm-style-iw-ch {
+  display: none !important;
+}
+
+.sorso-google-map .gm-style .gm-style-iw-d {
+  max-height: none !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+.sorso-google-map .gm-style .gm-style-iw-d > div {
+  margin: 0 !important;
+}
+
+.sorso-google-map .gm-style .gm-ui-hover-effect {
+  top: -14px !important;
+  right: -14px !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 999px !important;
+  background:
+    #ffffff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2313201f' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E")
+    center / 18px 18px no-repeat !important;
+  box-shadow: 0 8px 22px rgba(19, 32, 31, 0.18) !important;
+  opacity: 1 !important;
+}
+
+.sorso-google-map .gm-style .gm-ui-hover-effect span {
+  display: none !important;
+}
+
+.sorso-google-map .gm-style .gm-style-iw-tc {
+  filter: drop-shadow(0 4px 8px rgba(19, 32, 31, 0.12));
+}
