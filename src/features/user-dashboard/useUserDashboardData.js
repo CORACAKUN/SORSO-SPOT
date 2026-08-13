@@ -7,7 +7,14 @@ const fallbackDestinations = [
     slug: 'donsol-whale-shark-interaction',
     municipality: 'Donsol',
     category: 'Wildlife',
+    description:
+      'A guided wildlife experience in Donsol where visitors can responsibly encounter whale sharks during the season.',
+    address: 'Donsol, Sorsogon',
     best_time: 'November to June',
+    opening_hours: 'Tour schedule varies',
+    entrance_fee: 'Tour fees vary',
+    contact_info: 'Donsol tourism office',
+    travel_tips: 'Book with accredited operators and follow briefing rules before the interaction.',
     latitude: 12.9055,
     longitude: 123.5947,
     image_url:
@@ -18,7 +25,14 @@ const fallbackDestinations = [
     slug: 'bulusan-lake',
     municipality: 'Bulusan',
     category: 'Nature',
+    description:
+      'A cool mountain lake destination near Bulusan Volcano, known for kayaking, quiet scenery, and nature walks.',
+    address: 'Bulusan Volcano Natural Park, Bulusan',
     best_time: 'November to May',
+    opening_hours: 'Daytime visits recommended',
+    entrance_fee: 'Fees may apply',
+    contact_info: 'Bulusan tourism office',
+    travel_tips: 'Bring light rain protection and check local weather before traveling.',
     latitude: 12.7669,
     longitude: 124.0871,
     image_url: 'https://upload.wikimedia.org/wikipedia/commons/e/e5/Kayaking_at_Bulusan_Lake.jpg',
@@ -28,7 +42,14 @@ const fallbackDestinations = [
     slug: 'subic-beach',
     municipality: 'Matnog',
     category: 'Beach',
+    description:
+      'A popular island-hopping stop in Matnog with clear water, beach views, and boat-access routes.',
+    address: 'Matnog, Sorsogon',
     best_time: 'Dry season',
+    opening_hours: 'Day tours recommended',
+    entrance_fee: 'Boat and environmental fees may apply',
+    contact_info: 'Matnog tourism office',
+    travel_tips: 'Arrange boats early and bring dry bags for island hopping.',
     latitude: 12.5708,
     longitude: 124.0858,
     image_url:
@@ -39,7 +60,14 @@ const fallbackDestinations = [
     slug: 'sorsogon-city-baywalk',
     municipality: 'Sorsogon City',
     category: 'City Attraction',
+    description:
+      'A city waterfront stop for sunset walks, casual food trips, and relaxed views of Sorsogon Bay.',
+    address: 'Sorsogon City, Sorsogon',
     best_time: 'Year-round',
+    opening_hours: 'Open public area',
+    entrance_fee: 'Free',
+    contact_info: 'Sorsogon City tourism office',
+    travel_tips: 'Visit late afternoon for cooler weather and sunset views.',
     latitude: 12.9731,
     longitude: 123.9935,
     image_url:
@@ -89,7 +117,9 @@ export function useUserDashboardData(user) {
         await Promise.all([
           supabase
             .from('destinations')
-            .select('name, slug, municipality, category, best_time, latitude, longitude, image_url')
+            .select(
+              'name, slug, municipality, category, description, address, best_time, opening_hours, entrance_fee, contact_info, travel_tips, latitude, longitude, image_url, is_featured',
+            )
             .eq('is_published', true)
             .order('name', { ascending: true }),
           supabase

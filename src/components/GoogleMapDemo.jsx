@@ -1,4 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
+import {
+  FaClock,
+  FaCoins,
+  FaCompass,
+  FaMapMarkerAlt,
+  FaPhoneAlt,
+  FaRegCalendarAlt,
+  FaTimes,
+} from 'react-icons/fa';
 
 const sorsogonCenter = { lat: 12.9731, lng: 123.9935 };
 const sorsogonOverviewZoom = 10;
@@ -50,6 +59,7 @@ export default function GoogleMapDemo({ destinations }) {
   const [provider, setProvider] = useState('leaflet');
   const [leafletStyle, setLeafletStyle] = useState('satellite');
   const [isGoogleEnabled, setIsGoogleEnabled] = useState(false);
+  const [selectedDestination, setSelectedDestination] = useState(null);
   const [error, setError] = useState('');
   const validDestinations = destinations.filter((destination) => {
     return Number.isFinite(Number(destination.latitude)) && Number.isFinite(Number(destination.longitude));
@@ -81,8 +91,9 @@ export default function GoogleMapDemo({ destinations }) {
             Best time: ${escapeHtml(destination.best_time || 'Year-round')}
           </p>
           <button
+            data-sorso-details-slug="${escapeHtml(destination.slug)}"
             type="button"
-            style="margin-top: 12px; width: 100%; border: 0; border-radius: 8px; background: #116d75; color: white; min-height: 36px; font-weight: 900; cursor: default;"
+            style="margin-top: 12px; width: 100%; border: 0; border-radius: 8px; background: #116d75; color: white; min-height: 36px; font-weight: 900; cursor: pointer;"
           >
             View details
           </button>
@@ -90,6 +101,19 @@ export default function GoogleMapDemo({ destinations }) {
       </div>
     `;
   }
+
+  useEffect(() => {
+    function handleDetailsClick(event) {
+      const button = event.target.closest('[data-sorso-details-slug]');
+      if (!button) return;
+
+      const destination = destinations.find((item) => item.slug === button.dataset.sorsoDetailsSlug);
+      if (destination) setSelectedDestination(destination);
+    }
+
+    document.addEventListener('click', handleDetailsClick);
+    return () => document.removeEventListener('click', handleDetailsClick);
+  }, [destinations]);
 
   function openDestination(destination) {
     if (provider === 'leaflet') {
@@ -350,6 +374,15 @@ export default function GoogleMapDemo({ destinations }) {
                   <span className="mt-1 block truncate text-xs text-slate-500">
                     {destination.category || 'Tourist spot'}
                   </span>
+                  <span
+                    className="mt-2 inline-flex text-xs font-black text-sea"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedDestination(destination);
+                    }}
+                  >
+                    View details
+                  </span>
                 </span>
               </button>
             ))
@@ -375,6 +408,40 @@ export default function GoogleMapDemo({ destinations }) {
   }
 
   const isGooglePaused = provider === 'google' && !isGoogleEnabled;
+  const destinationDetails = selectedDestination
+    ? [
+        {
+          icon: FaRegCalendarAlt,
+          label: 'Best time',
+          value: selectedDestination.best_time,
+        },
+        {
+          icon: FaClock,
+          label: 'Opening hours',
+          value: selectedDestination.opening_hours,
+        },
+        {
+          icon: FaCoins,
+          label: 'Entrance fee',
+          value: selectedDestination.entrance_fee,
+        },
+        {
+          icon: FaMapMarkerAlt,
+          label: 'Address',
+          value: selectedDestination.address,
+        },
+        {
+          icon: FaPhoneAlt,
+          label: 'Contact',
+          value: selectedDestination.contact_info,
+        },
+        {
+          icon: FaCompass,
+          label: 'Travel tips',
+          value: selectedDestination.travel_tips,
+        },
+      ].filter((item) => item.value)
+    : [];
 
   return (
     <div className="relative min-h-[620px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
@@ -462,6 +529,65 @@ export default function GoogleMapDemo({ destinations }) {
       </div>
 
       {renderDestinationList()}
+
+      {selectedDestination && (
+        <div
+          className="fixed inset-0 z-[2000] grid place-items-center bg-ink/60 px-4 py-6 backdrop-blur-sm"
+          onClick={() => setSelectedDestination(null)}
+          role="presentation"
+        >
+          <section
+            className="max-h-[calc(100svh-48px)] w-full max-w-3xl overflow-y-auto rounded-lg bg-white shadow-travel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="relative">
+              <img
+                alt=""
+                className="h-64 w-full object-cover"
+                src={selectedDestination.image_url || fallbackImage}
+              />
+              <button
+                aria-label="Close destination details"
+                className="absolute right-3 top-3 grid size-10 place-items-center rounded-full bg-white text-ink shadow-travel transition hover:bg-mist"
+                onClick={() => setSelectedDestination(null)}
+                type="button"
+              >
+                <FaTimes aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-6">
+              <p className="text-xs font-black uppercase text-sea">
+                {selectedDestination.municipality || 'Sorsogon'} -{' '}
+                {selectedDestination.category || 'Tourist spot'}
+              </p>
+              <h2 className="mt-2 text-3xl font-black leading-none">
+                {selectedDestination.name}
+              </h2>
+              {selectedDestination.description && (
+                <p className="mt-4 text-sm leading-relaxed text-slate-600">
+                  {selectedDestination.description}
+                </p>
+              )}
+
+              <dl className="mt-6 grid gap-3 sm:grid-cols-2">
+                {destinationDetails.map(({ icon: Icon, label, value }) => (
+                  <div className="grid grid-cols-[34px_1fr] gap-3 rounded-lg bg-mist p-4" key={label}>
+                    <dt className="grid size-9 place-items-center rounded-lg bg-white text-sea">
+                      <Icon aria-hidden="true" />
+                      <span className="sr-only">{label}</span>
+                    </dt>
+                    <dd>
+                      <p className="text-xs font-black uppercase text-slate-500">{label}</p>
+                      <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
