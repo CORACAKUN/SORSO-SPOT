@@ -1,52 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import GoogleMapDemo from './GoogleMapDemo.jsx';
-
-const fallbackDestinations = [
-  {
-    name: 'Donsol Whale Shark Interaction',
-    slug: 'donsol-whale-shark-interaction',
-    municipality: 'Donsol',
-    category: 'Wildlife',
-    best_time: 'November to June',
-    latitude: 12.9055,
-    longitude: 123.5947,
-    image_url:
-      'https://images.unsplash.com/photo-1540202404-b2979d19ed37?auto=format&fit=crop&w=1200&q=80',
-  },
-  {
-    name: 'Bulusan Lake',
-    slug: 'bulusan-lake',
-    municipality: 'Bulusan',
-    category: 'Nature',
-    best_time: 'November to May',
-    latitude: 12.7669,
-    longitude: 124.0871,
-    image_url: 'https://upload.wikimedia.org/wikipedia/commons/e/e5/Kayaking_at_Bulusan_Lake.jpg',
-  },
-  {
-    name: 'Subic Beach',
-    slug: 'subic-beach',
-    municipality: 'Matnog',
-    category: 'Beach',
-    best_time: 'Dry season',
-    latitude: 12.5708,
-    longitude: 124.0858,
-    image_url:
-      'https://i0.wp.com/joansfootprints.com/wp-content/uploads/2024/08/grouphie-4-1-1024x576.jpg?resize=1024%2C576&ssl=1',
-  },
-  {
-    name: 'Sorsogon City Baywalk',
-    slug: 'sorsogon-city-baywalk',
-    municipality: 'Sorsogon City',
-    category: 'City Attraction',
-    best_time: 'Year-round',
-    latitude: 12.9731,
-    longitude: 123.9935,
-    image_url:
-      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
-  },
-];
+import React, { useEffect, useState } from 'react';
+import DashboardPanel from '../../components/shared/DashboardPanel.jsx';
+import EmptyState from '../../components/shared/EmptyState.jsx';
+import { supabase } from '../../lib/supabaseClient';
+import GoogleMapDemo from '../../components/GoogleMapDemo.jsx';
+import { useUserDashboardData } from './useUserDashboardData';
 
 const tabs = [
   { id: 'explore', label: 'Explore', icon: 'EX' },
@@ -63,56 +20,23 @@ const tripPlan = [
   ['Day 3', 'Matnog island hopping or Donsol wildlife tour.'],
 ];
 
-function EmptyState({ text }) {
-  return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-semibold text-slate-500">
-      {text}
-    </div>
-  );
-}
-
-function Panel({ children, eyebrow, title }) {
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <p className="text-xs font-black uppercase text-sea">{eyebrow}</p>
-      <h2 className="mt-1 text-2xl font-black">{title}</h2>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
 export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBack }) {
-  const [destinations, setDestinations] = useState(fallbackDestinations);
-  const [favorites, setFavorites] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [submissions, setSubmissions] = useState([]);
   const [activeTab, setActiveTab] = useState('explore');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
-  const [message, setMessage] = useState('');
+  const {
+    destinations,
+    isLoading,
+    message,
+    reviews,
+    savedDestinations,
+    setMessage,
+    submissions,
+  } = useUserDashboardData(user);
 
   const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Traveler';
   const activeTabLabel = tabs.find((tab) => tab.id === activeTab)?.label || 'Explore';
-
-  const destinationBySlug = useMemo(() => {
-    return destinations.reduce((map, destination) => {
-      map[destination.slug] = destination;
-      return map;
-    }, {});
-  }, [destinations]);
-
-  const savedDestinations = favorites.map((favorite) => {
-    const destination = destinationBySlug[favorite.destination_slug];
-    return {
-      ...favorite,
-      title: destination?.name || favorite.destination_slug,
-      location: destination?.municipality || 'Sorsogon',
-      category: destination?.category || 'Saved place',
-      bestTime: destination?.best_time || 'Year-round',
-    };
-  });
 
   useEffect(() => {
     const welcomeKey = `sorso-dashboard-welcome-${user.id}`;
@@ -121,69 +45,6 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
       window.sessionStorage.setItem(welcomeKey, 'seen');
     }
   }, [user.id]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadDashboard() {
-      if (!supabase) {
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      setMessage('');
-
-      const [destinationsResult, favoritesResult, reviewsResult, submissionsResult] =
-        await Promise.all([
-          supabase
-            .from('destinations')
-            .select('name, slug, municipality, category, best_time, latitude, longitude, image_url')
-            .eq('is_published', true)
-            .order('name', { ascending: true }),
-          supabase
-            .from('favorites')
-            .select('destination_slug, created_at')
-            .eq('user_email', user.email)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('reviews')
-            .select('destination_slug, rating, title, body, status, created_at')
-            .eq('user_email', user.email)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('submissions')
-            .select('submission_type, name, municipality, status, submitted_at')
-            .eq('submitter_email', user.email)
-            .order('submitted_at', { ascending: false }),
-        ]);
-
-      if (!isMounted) return;
-
-      if (destinationsResult.data?.length) setDestinations(destinationsResult.data);
-      setFavorites(favoritesResult.data || []);
-      setReviews(reviewsResult.data || []);
-      setSubmissions(submissionsResult.data || []);
-
-      const firstError =
-        destinationsResult.error ||
-        favoritesResult.error ||
-        reviewsResult.error ||
-        submissionsResult.error;
-
-      if (firstError) {
-        setMessage(`Some dashboard data could not be loaded: ${firstError.message}`);
-      }
-
-      setIsLoading(false);
-    }
-
-    loadDashboard();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user.email]);
 
   async function handleSignOut() {
     if (!supabase) return;
@@ -197,7 +58,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
 
   function renderSavedPlaces() {
     return (
-      <Panel eyebrow="Saved places" title="Your Sorsogon shortlist">
+      <DashboardPanel eyebrow="Saved places" title="Your Sorsogon shortlist">
         <div className="grid gap-3">
           {isLoading ? (
             <EmptyState text="Loading saved places..." />
@@ -222,7 +83,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
             <EmptyState text="No saved places yet. Browse destinations and save favorites next." />
           )}
         </div>
-      </Panel>
+      </DashboardPanel>
     );
   }
 
@@ -335,13 +196,13 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
           )}
 
           {activeTab === 'explore' && (
-            <Panel eyebrow="Explore" title="Sorsogon map">
+            <DashboardPanel eyebrow="Explore" title="Sorsogon map">
               <GoogleMapDemo destinations={destinations} />
-            </Panel>
+            </DashboardPanel>
           )}
 
           {activeTab === 'reviews' && (
-            <Panel eyebrow="Reviews" title="Your recent reviews">
+            <DashboardPanel eyebrow="Reviews" title="Your recent reviews">
               <div className="grid gap-3">
                 {isLoading ? (
                   <EmptyState text="Loading reviews..." />
@@ -367,11 +228,11 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                   <EmptyState text="No reviews yet. Your destination reviews will appear here." />
                 )}
               </div>
-            </Panel>
+            </DashboardPanel>
           )}
 
           {activeTab === 'submissions' && (
-            <Panel eyebrow="Submissions" title="Listings you submitted">
+            <DashboardPanel eyebrow="Submissions" title="Listings you submitted">
               <div className="grid gap-3">
                 {isLoading ? (
                   <EmptyState text="Loading submissions..." />
@@ -396,11 +257,11 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                   <EmptyState text="No submissions yet. Attraction and accommodation submissions will appear here." />
                 )}
               </div>
-            </Panel>
+            </DashboardPanel>
           )}
 
           {activeTab === 'travel' && (
-            <Panel eyebrow="Travel plans" title="Starter itinerary">
+            <DashboardPanel eyebrow="Travel plans" title="Starter itinerary">
               <div className="grid gap-3">
                 {tripPlan.map(([label, text]) => (
                   <article className="rounded-lg border border-slate-200 bg-white p-4" key={label}>
@@ -409,11 +270,11 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                   </article>
                 ))}
               </div>
-            </Panel>
+            </DashboardPanel>
           )}
 
           {activeTab === 'account' && (
-            <Panel eyebrow="Account" title="Travel profile">
+            <DashboardPanel eyebrow="Account" title="Travel profile">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-lg bg-mist p-4">
                   <p className="text-sm font-extrabold text-slate-500">Display name</p>
@@ -436,7 +297,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                 Account settings, profile editing, and notification preferences can be added here
                 later.
               </p>
-            </Panel>
+            </DashboardPanel>
           )}
 
           {activeTab === 'saved' && renderSavedPlaces()}
