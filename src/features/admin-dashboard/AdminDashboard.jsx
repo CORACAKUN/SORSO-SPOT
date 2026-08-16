@@ -2,6 +2,13 @@ import React, { useState } from 'react';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import DestinationManager from './components/DestinationManager.jsx';
 import MapManager from './components/MapManager.jsx';
+import OverviewManager from './components/OverviewManager.jsx';
+import SubmissionsManager from './components/SubmissionsManager.jsx';
+import AccommodationsManager from './components/AccommodationsManager.jsx';
+import ReviewsManager from './components/ReviewsManager.jsx';
+import SettingsManager from './components/SettingsManager.jsx';
+import TransportManager from './components/TransportManager.jsx';
+import UsersManager from './components/UsersManager.jsx';
 import ShellCard from '../../components/shared/ShellCard.jsx';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -15,13 +22,6 @@ const adminTabs = [
   { id: 'transport', label: 'Transport', icon: 'TR' },
   { id: 'users', label: 'Users', icon: 'US' },
   { id: 'settings', label: 'Settings', icon: 'ST' },
-];
-
-const overviewCards = [
-  ['Destinations', 'Manage tourist spots and publication status.'],
-  ['Pending submissions', 'Review user-submitted attractions and stays.'],
-  ['Reviews', 'Moderate ratings and public feedback.'],
-  ['Map coverage', 'Check locations missing coordinates.'],
 ];
 
 const moduleDescriptions = {
@@ -210,39 +210,23 @@ export default function AdminDashboard({ user, onBack, onTravelerOpen }) {
           )}
 
           {activeTab === 'overview' ? (
-            <div className="grid gap-6">
-              <section className="rounded-lg bg-ink p-6 text-white shadow-travel">
-                <p className="text-xs font-black uppercase text-sun">Admin overview</p>
-                <h2 className="mt-2 text-3xl font-black leading-none">Content control center</h2>
-                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/70">
-                  Phase 1 sets up the admin navigation, module surfaces, and content-management
-                  structure. Live data, CRUD forms, and moderation actions come next.
-                </p>
-              </section>
-
-              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {overviewCards.map(([title, description]) => (
-                  <ShellCard key={title}>
-                    <p className="text-xs font-black uppercase text-slate-500">Module</p>
-                    <h3 className="mt-2 text-xl font-black">{title}</h3>
-                    <p className="mt-3 text-sm leading-relaxed text-slate-600">{description}</p>
-                  </ShellCard>
-                ))}
-              </section>
-
-              <ShellCard>
-                <p className="text-xs font-black uppercase text-sea">Signed in admin</p>
-                <h3 className="mt-1 text-2xl font-black">{user.email}</h3>
-                <p className="mt-3 text-sm text-slate-600">
-                  This shell is frontend-gated for now. Add Supabase RLS policies before allowing
-                  real write actions.
-                </p>
-              </ShellCard>
-            </div>
+            <OverviewManager user={user} onOpenTab={setActiveTab} />
           ) : activeTab === 'destinations' ? (
             <DestinationManager />
           ) : activeTab === 'map' ? (
             <MapManager />
+          ) : activeTab === 'submissions' ? (
+            <SubmissionsManager />
+          ) : activeTab === 'accommodations' ? (
+            <AccommodationsManager />
+          ) : activeTab === 'reviews' ? (
+            <ReviewsManager />
+          ) : activeTab === 'transport' ? (
+            <TransportManager />
+          ) : activeTab === 'users' ? (
+            <UsersManager />
+          ) : activeTab === 'settings' ? (
+            <SettingsManager />
           ) : (
             <PlaceholderModule activeTab={activeTab} />
           )}
