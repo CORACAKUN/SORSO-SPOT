@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import DestinationManager from './components/DestinationManager.jsx';
+import MapManager from './components/MapManager.jsx';
 import ShellCard from '../../components/shared/ShellCard.jsx';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -240,6 +241,8 @@ export default function AdminDashboard({ user, onBack, onTravelerOpen }) {
             </div>
           ) : activeTab === 'destinations' ? (
             <DestinationManager />
+          ) : activeTab === 'map' ? (
+            <MapManager />
           ) : (
             <PlaceholderModule activeTab={activeTab} />
           )}

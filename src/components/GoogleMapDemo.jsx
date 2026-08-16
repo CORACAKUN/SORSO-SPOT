@@ -68,6 +68,7 @@ export default function GoogleMapDemo({
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [error, setError] = useState('');
   const [favoriteActionSlug, setFavoriteActionSlug] = useState('');
+  const canSaveDestinations = Boolean(onToggleFavorite);
   const validDestinations = destinations.filter((destination) => {
     return Number.isFinite(Number(destination.latitude)) && Number.isFinite(Number(destination.longitude));
   });
@@ -373,7 +374,9 @@ export default function GoogleMapDemo({
 
               return (
                 <button
-                  className="grid grid-cols-[64px_1fr_28px] gap-3 rounded-lg p-2 text-left hover:bg-mist"
+                  className={`grid gap-3 rounded-lg p-2 text-left hover:bg-mist ${
+                    canSaveDestinations ? 'grid-cols-[64px_1fr_28px]' : 'grid-cols-[64px_1fr]'
+                  }`}
                   key={destination.slug}
                   onClick={() => openDestination(destination)}
                   type="button"
@@ -401,14 +404,16 @@ export default function GoogleMapDemo({
                       View details
                     </span>
                   </span>
-                  <span
-                    className={`grid size-8 place-items-center rounded-lg ${
-                      isSaved ? 'bg-sun/25 text-ink' : 'bg-mist text-slate-500'
-                    }`}
-                    title={isSaved ? 'Saved' : 'Not saved'}
-                  >
-                    {isSaved ? <FaBookmark aria-hidden="true" /> : <FaRegBookmark aria-hidden="true" />}
-                  </span>
+                  {canSaveDestinations && (
+                    <span
+                      className={`grid size-8 place-items-center rounded-lg ${
+                        isSaved ? 'bg-sun/25 text-ink' : 'bg-mist text-slate-500'
+                      }`}
+                      title={isSaved ? 'Saved' : 'Not saved'}
+                    >
+                      {isSaved ? <FaBookmark aria-hidden="true" /> : <FaRegBookmark aria-hidden="true" />}
+                    </span>
+                  )}
                 </button>
               );
             })
