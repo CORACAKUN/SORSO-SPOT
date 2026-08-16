@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { FaPlus, FaTimes } from 'react-icons/fa';
 import ShellCard from '../../../components/shared/ShellCard.jsx';
 import { supabase } from '../../../lib/supabaseClient';
 
@@ -98,6 +99,7 @@ export default function DestinationManager() {
   const [editingId, setEditingId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
 
@@ -172,12 +174,21 @@ export default function DestinationManager() {
       is_featured: Boolean(destination.is_featured),
       is_published: Boolean(destination.is_published),
     });
+    setIsFormOpen(true);
+    setMessage('');
+  }
+
+  function openCreateForm() {
+    setEditingId(null);
+    setForm(emptyDestinationForm);
+    setIsFormOpen(true);
     setMessage('');
   }
 
   function resetForm() {
     setEditingId(null);
     setForm(emptyDestinationForm);
+    setIsFormOpen(false);
     setMessage('');
   }
 
@@ -238,7 +249,7 @@ export default function DestinationManager() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="grid gap-6">
       <ShellCard>
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
@@ -249,13 +260,23 @@ export default function DestinationManager() {
               traveler map.
             </p>
           </div>
-          <input
-            className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20 md:w-72"
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search destinations"
-            type="search"
-            value={search}
-          />
+          <div className="flex flex-col gap-2 sm:flex-row md:items-center">
+            <input
+              className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20 md:w-72"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search destinations"
+              type="search"
+              value={search}
+            />
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-4 text-sm font-extrabold text-white"
+              onClick={openCreateForm}
+              type="button"
+            >
+              <FaPlus aria-hidden="true" />
+              Add
+            </button>
+          </div>
         </div>
 
         {message && (
@@ -342,168 +363,199 @@ export default function DestinationManager() {
         </div>
       </ShellCard>
 
-      <ShellCard className="h-fit">
-        <p className="text-xs font-black uppercase text-sea">
-          {editingId ? 'Edit destination' : 'New destination'}
-        </p>
-        <h2 className="mt-1 text-2xl font-black">
-          {editingId ? 'Update place details' : 'Add a tourist spot'}
-        </h2>
-
-        <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
-          <TextField
-            label="Name"
-            name="name"
-            onChange={handleFieldChange}
-            placeholder="Bulusan Lake"
-            required
-            value={form.name}
-          />
-          <TextField
-            label="Slug"
-            name="slug"
-            onChange={handleFieldChange}
-            placeholder="bulusan-lake"
-            required
-            value={form.slug}
-          />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-            <TextField
-              label="Municipality"
-              name="municipality"
-              onChange={handleFieldChange}
-              placeholder="Bulusan"
-              required
-              value={form.municipality}
-            />
-            <TextField
-              label="Category"
-              name="category"
-              onChange={handleFieldChange}
-              placeholder="Nature"
-              required
-              value={form.category}
-            />
-          </div>
-          <TextField
-            label="Best time"
-            name="best_time"
-            onChange={handleFieldChange}
-            placeholder="November to May"
-            value={form.best_time}
-          />
-          <TextAreaField
-            label="Description"
-            name="description"
-            onChange={handleFieldChange}
-            placeholder="Short tourist-friendly overview of the place."
-            value={form.description}
-          />
-          <TextField
-            label="Address"
-            name="address"
-            onChange={handleFieldChange}
-            placeholder="Barangay or street, municipality"
-            value={form.address}
-          />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-            <TextField
-              label="Opening hours"
-              name="opening_hours"
-              onChange={handleFieldChange}
-              placeholder="7:00 AM - 5:00 PM"
-              value={form.opening_hours}
-            />
-            <TextField
-              label="Entrance fee"
-              name="entrance_fee"
-              onChange={handleFieldChange}
-              placeholder="Free / PHP 50"
-              value={form.entrance_fee}
-            />
-          </div>
-          <TextField
-            label="Contact info"
-            name="contact_info"
-            onChange={handleFieldChange}
-            placeholder="Phone, Facebook page, or tourism office"
-            value={form.contact_info}
-          />
-          <TextAreaField
-            label="Travel tips"
-            name="travel_tips"
-            onChange={handleFieldChange}
-            placeholder="What to bring, best route, local reminders."
-            value={form.travel_tips}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TextField
-              label="Latitude"
-              name="latitude"
-              onChange={handleFieldChange}
-              placeholder="12.7669"
-              step="any"
-              type="number"
-              value={form.latitude}
-            />
-            <TextField
-              label="Longitude"
-              name="longitude"
-              onChange={handleFieldChange}
-              placeholder="124.0871"
-              step="any"
-              type="number"
-              value={form.longitude}
-            />
-          </div>
-          <TextField
-            label="Image URL"
-            name="image_url"
-            onChange={handleFieldChange}
-            placeholder="https://example.com/photo.jpg"
-            type="url"
-            value={form.image_url}
-          />
-          <label className="flex min-h-11 items-center gap-3 rounded-lg bg-mist px-3 text-sm font-extrabold text-ink">
-            <input
-              checked={form.is_published}
-              className="size-4 accent-teal-700"
-              name="is_published"
-              onChange={handleFieldChange}
-              type="checkbox"
-            />
-            Show on traveler map
-          </label>
-          <label className="flex min-h-11 items-center gap-3 rounded-lg bg-mist px-3 text-sm font-extrabold text-ink">
-            <input
-              checked={form.is_featured}
-              className="size-4 accent-teal-700"
-              name="is_featured"
-              onChange={handleFieldChange}
-              type="checkbox"
-            />
-            Mark as featured
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="min-h-11 flex-1 rounded-lg bg-ink px-4 font-extrabold text-white disabled:opacity-60"
-              disabled={isSaving}
-              type="submit"
-            >
-              {isSaving ? 'Saving...' : editingId ? 'Save changes' : 'Add destination'}
-            </button>
-            {editingId && (
+      {isFormOpen && (
+        <div
+          className="fixed inset-0 z-[2000] grid place-items-center bg-ink/60 px-4 py-6 backdrop-blur-sm"
+          onClick={resetForm}
+          role="presentation"
+        >
+          <section
+            className="max-h-[calc(100svh-48px)] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-5 shadow-travel sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase text-sea">
+                  {editingId ? 'Edit destination' : 'New destination'}
+                </p>
+                <h2 className="mt-1 text-2xl font-black">
+                  {editingId ? 'Update place details' : 'Add a tourist spot'}
+                </h2>
+              </div>
               <button
-                className="min-h-11 rounded-lg border border-slate-200 px-4 font-extrabold text-ink"
+                aria-label="Close destination form"
+                className="grid size-10 shrink-0 place-items-center rounded-full bg-mist text-ink transition hover:bg-slate-200"
                 onClick={resetForm}
                 type="button"
               >
-                Cancel
+                <FaTimes aria-hidden="true" />
               </button>
+            </div>
+
+            {message && (
+              <p className="mt-5 rounded-lg bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                {message}
+              </p>
             )}
-          </div>
-        </form>
-      </ShellCard>
+
+            <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                  label="Name"
+                  name="name"
+                  onChange={handleFieldChange}
+                  placeholder="Bulusan Lake"
+                  required
+                  value={form.name}
+                />
+                <TextField
+                  label="Slug"
+                  name="slug"
+                  onChange={handleFieldChange}
+                  placeholder="bulusan-lake"
+                  required
+                  value={form.slug}
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                  label="Municipality"
+                  name="municipality"
+                  onChange={handleFieldChange}
+                  placeholder="Bulusan"
+                  required
+                  value={form.municipality}
+                />
+                <TextField
+                  label="Category"
+                  name="category"
+                  onChange={handleFieldChange}
+                  placeholder="Nature"
+                  required
+                  value={form.category}
+                />
+              </div>
+              <TextField
+                label="Best time"
+                name="best_time"
+                onChange={handleFieldChange}
+                placeholder="November to May"
+                value={form.best_time}
+              />
+              <TextAreaField
+                label="Description"
+                name="description"
+                onChange={handleFieldChange}
+                placeholder="Short tourist-friendly overview of the place."
+                value={form.description}
+              />
+              <TextField
+                label="Address"
+                name="address"
+                onChange={handleFieldChange}
+                placeholder="Barangay or street, municipality"
+                value={form.address}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                  label="Opening hours"
+                  name="opening_hours"
+                  onChange={handleFieldChange}
+                  placeholder="7:00 AM - 5:00 PM"
+                  value={form.opening_hours}
+                />
+                <TextField
+                  label="Entrance fee"
+                  name="entrance_fee"
+                  onChange={handleFieldChange}
+                  placeholder="Free / PHP 50"
+                  value={form.entrance_fee}
+                />
+              </div>
+              <TextField
+                label="Contact info"
+                name="contact_info"
+                onChange={handleFieldChange}
+                placeholder="Phone, Facebook page, or tourism office"
+                value={form.contact_info}
+              />
+              <TextAreaField
+                label="Travel tips"
+                name="travel_tips"
+                onChange={handleFieldChange}
+                placeholder="What to bring, best route, local reminders."
+                value={form.travel_tips}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                  label="Latitude"
+                  name="latitude"
+                  onChange={handleFieldChange}
+                  placeholder="12.7669"
+                  step="any"
+                  type="number"
+                  value={form.latitude}
+                />
+                <TextField
+                  label="Longitude"
+                  name="longitude"
+                  onChange={handleFieldChange}
+                  placeholder="124.0871"
+                  step="any"
+                  type="number"
+                  value={form.longitude}
+                />
+              </div>
+              <TextField
+                label="Image URL"
+                name="image_url"
+                onChange={handleFieldChange}
+                placeholder="https://example.com/photo.jpg"
+                type="url"
+                value={form.image_url}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex min-h-11 items-center gap-3 rounded-lg bg-mist px-3 text-sm font-extrabold text-ink">
+                  <input
+                    checked={form.is_published}
+                    className="size-4 accent-teal-700"
+                    name="is_published"
+                    onChange={handleFieldChange}
+                    type="checkbox"
+                  />
+                  Show on traveler map
+                </label>
+                <label className="flex min-h-11 items-center gap-3 rounded-lg bg-mist px-3 text-sm font-extrabold text-ink">
+                  <input
+                    checked={form.is_featured}
+                    className="size-4 accent-teal-700"
+                    name="is_featured"
+                    onChange={handleFieldChange}
+                    type="checkbox"
+                  />
+                  Mark as featured
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="min-h-11 flex-1 rounded-lg bg-ink px-4 font-extrabold text-white disabled:opacity-60"
+                  disabled={isSaving}
+                  type="submit"
+                >
+                  {isSaving ? 'Saving...' : editingId ? 'Save changes' : 'Add destination'}
+                </button>
+                <button
+                  className="min-h-11 rounded-lg border border-slate-200 px-4 font-extrabold text-ink"
+                  onClick={resetForm}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
