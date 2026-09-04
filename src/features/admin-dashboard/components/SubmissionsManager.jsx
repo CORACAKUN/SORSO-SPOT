@@ -4,9 +4,22 @@ import ShellCard from '../../../components/shared/ShellCard.jsx';
 import { supabase } from '../../../lib/supabaseClient';
 
 const statusOptions = ['all', 'pending', 'approved', 'rejected'];
+const draftableTypes = new Set(['destination', 'accommodation']);
 
 function normalizeStatus(value) {
   return String(value || 'pending').trim().toLowerCase();
+}
+
+function normalizeType(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function createSlug(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 export default function SubmissionsManager() {
@@ -16,6 +29,7 @@ export default function SubmissionsManager() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
+  const [convertingId, setConvertingId] = useState(null);
   const [message, setMessage] = useState('');
 
   const submissionTypes = useMemo(() => {
@@ -26,7 +40,8 @@ export default function SubmissionsManager() {
     return submissions.filter((submission) => {
       const matchesStatus =
         statusFilter === 'all' || normalizeStatus(submission.status) === statusFilter;
-      const matchesType = typeFilter === 'all' || submission.submission_type === typeFilter;
+      const matchesType =
+        typeFilter === 'all' || normalizeType(submission.submission_type) === normalizeType(typeFilter);
       return matchesStatus && matchesType;
     });
   }, [statusFilter, submissions, typeFilter]);
@@ -55,7 +70,7 @@ export default function SubmissionsManager() {
 
     const { data, error } = await supabase
       .from('submissions')
-      .select('id, submission_type, name, municipality, status, submitted_at, submitter_email')
+      .select('id, submission_type, name, municipality, description, contact_info, status, submitted_at, submitter_email')
       .order('submitted_at', { ascending: false });
 
     if (error) {
@@ -85,7 +100,7 @@ export default function SubmissionsManager() {
       .from('submissions')
       .update({ status: nextStatus })
       .eq('id', submission.id)
-      .select('id, submission_type, name, municipality, status, submitted_at, submitter_email')
+      .select('id, submission_type, name, municipality, description, contact_info, status, submitted_at, submitter_email')
       .single();
 
     setUpdatingId(null);
@@ -99,6 +114,72 @@ export default function SubmissionsManager() {
       current.map((item) => (item.id === submission.id ? data : item)),
     );
     setSelectedSubmission((current) => (current?.id === submission.id ? data : current));
+  }
+
+  async function createDraftListing(submission) {
+    const submissionType = normalizeType(submission.submission_type);
+    if (!draftableTypes.has(submissionType)) {
+      setMessage('Only destination and accommodation submissions can be converted into draft listings.');
+      return;
+    }
+
+    if (!submission.name?.trim() || !submission.municipality?.trim()) {
+      setMessage('Name and municipality are required before creating a draft listing.');
+      return;
+    }
+
+    setConvertingId(submission.id);
+    setMessage('');
+
+    const table = submissionType === 'accommodation' ? 'accommodations' : 'destinations';
+    const payload =
+      submissionType === 'accommodation'
+        ? {
+            name: submission.name.trim(),
+            municipality: submission.municipality.trim(),
+            accommodation_type: 'Traveler submission',
+            amenities: submission.description?.trim() || null,
+            contact_info: submission.contact_info?.trim() || null,
+            is_published: false,
+          }
+        : {
+            name: submission.name.trim(),
+            slug: createSlug(submission.name),
+            municipality: submission.municipality.trim(),
+            category: 'Traveler submission',
+            description: submission.description?.trim() || null,
+            contact_info: submission.contact_info?.trim() || null,
+            is_featured: false,
+            is_published: false,
+          };
+
+    const { error: insertError } = await supabase.from(table).insert(payload);
+
+    if (insertError) {
+      setConvertingId(null);
+      setMessage(`Unable to create ${submissionType} draft: ${insertError.message}`);
+      return;
+    }
+
+    const { data, error: updateError } = await supabase
+      .from('submissions')
+      .update({ status: 'approved' })
+      .eq('id', submission.id)
+      .select('id, submission_type, name, municipality, description, contact_info, status, submitted_at, submitter_email')
+      .single();
+
+    setConvertingId(null);
+
+    if (updateError) {
+      setMessage(`Draft created, but submission status was not updated: ${updateError.message}`);
+      return;
+    }
+
+    setSubmissions((current) =>
+      current.map((item) => (item.id === submission.id ? data : item)),
+    );
+    setSelectedSubmission((current) => (current?.id === submission.id ? data : current));
+    setMessage(`${submission.name} was created as an unpublished ${submissionType} draft.`);
   }
 
   function renderStatusBadge(statusValue) {
@@ -205,7 +286,11 @@ export default function SubmissionsManager() {
             {isLoading ? (
               <p className="p-4 text-sm font-semibold text-slate-500">Loading submissions...</p>
             ) : filteredSubmissions.length ? (
-              filteredSubmissions.map((submission) => (
+              filteredSubmissions.map((submission) => {
+                const submissionType = normalizeType(submission.submission_type);
+                const canCreateDraft = draftableTypes.has(submissionType);
+
+                return (
                 <article
                   className="grid gap-4 p-4 lg:grid-cols-[1fr_.8fr_.8fr_.7fr_180px] lg:items-center"
                   key={submission.id || `${submission.name}-${submission.submitted_at}`}
@@ -218,6 +303,11 @@ export default function SubmissionsManager() {
                         ? new Date(submission.submitted_at).toLocaleDateString()
                         : 'No date'}
                     </p>
+                    {submission.description && (
+                      <p className="mt-2 line-clamp-2 text-sm text-slate-600">
+                        {submission.description}
+                      </p>
+                    )}
                   </div>
                   <p className="text-sm font-semibold text-slate-700">
                     {submission.submission_type || 'Unknown'}
@@ -235,9 +325,20 @@ export default function SubmissionsManager() {
                       <FaEye aria-hidden="true" />
                       View
                     </button>
+                    {canCreateDraft && (
+                      <button
+                        className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-ink px-3 text-sm font-extrabold text-white disabled:opacity-60"
+                        disabled={convertingId === submission.id || updatingId === submission.id}
+                        onClick={() => createDraftListing(submission)}
+                        type="button"
+                      >
+                        <FaCheck aria-hidden="true" />
+                        Draft
+                      </button>
+                    )}
                     <button
                       className="grid min-h-10 min-w-10 place-items-center rounded-lg bg-sea px-3 text-sm font-extrabold text-white disabled:opacity-60"
-                      disabled={updatingId === submission.id}
+                      disabled={updatingId === submission.id || convertingId === submission.id}
                       onClick={() => updateSubmissionStatus(submission, 'approved')}
                       title="Approve submission"
                       type="button"
@@ -246,7 +347,7 @@ export default function SubmissionsManager() {
                     </button>
                     <button
                       className="grid min-h-10 min-w-10 place-items-center rounded-lg bg-rose-600 px-3 text-sm font-extrabold text-white disabled:opacity-60"
-                      disabled={updatingId === submission.id}
+                      disabled={updatingId === submission.id || convertingId === submission.id}
                       onClick={() => updateSubmissionStatus(submission, 'rejected')}
                       title="Reject submission"
                       type="button"
@@ -255,7 +356,8 @@ export default function SubmissionsManager() {
                     </button>
                   </div>
                 </article>
-              ))
+                );
+              })
             ) : (
               <p className="p-4 text-sm font-semibold text-slate-500">
                 No submissions match the current filters.
@@ -298,6 +400,8 @@ export default function SubmissionsManager() {
               {[
                 ['Status', normalizeStatus(selectedSubmission.status)],
                 ['Municipality', selectedSubmission.municipality],
+                ['Description', selectedSubmission.description],
+                ['Contact info', selectedSubmission.contact_info],
                 ['Submitter', selectedSubmission.submitter_email],
                 [
                   'Submitted',
@@ -318,7 +422,7 @@ export default function SubmissionsManager() {
             <div className="mt-6 flex flex-wrap gap-2">
               <button
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sea px-4 text-sm font-extrabold text-white disabled:opacity-60"
-                disabled={updatingId === selectedSubmission.id}
+                disabled={updatingId === selectedSubmission.id || convertingId === selectedSubmission.id}
                 onClick={() => updateSubmissionStatus(selectedSubmission, 'approved')}
                 type="button"
               >
@@ -327,13 +431,24 @@ export default function SubmissionsManager() {
               </button>
               <button
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-rose-600 px-4 text-sm font-extrabold text-white disabled:opacity-60"
-                disabled={updatingId === selectedSubmission.id}
+                disabled={updatingId === selectedSubmission.id || convertingId === selectedSubmission.id}
                 onClick={() => updateSubmissionStatus(selectedSubmission, 'rejected')}
                 type="button"
               >
                 <FaTimes aria-hidden="true" />
                 Reject
               </button>
+              {draftableTypes.has(normalizeType(selectedSubmission.submission_type)) && (
+                <button
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-ink px-4 text-sm font-extrabold text-white disabled:opacity-60"
+                  disabled={updatingId === selectedSubmission.id || convertingId === selectedSubmission.id}
+                  onClick={() => createDraftListing(selectedSubmission)}
+                  type="button"
+                >
+                  <FaCheck aria-hidden="true" />
+                  {convertingId === selectedSubmission.id ? 'Creating...' : 'Create draft listing'}
+                </button>
+              )}
             </div>
           </section>
         </div>

@@ -39,6 +39,8 @@ const emptySubmissionForm = {
   submission_type: 'destination',
   name: '',
   municipality: '',
+  description: '',
+  contact_info: '',
 };
 
 function Field({ label, name, onChange, placeholder, value, type = 'text' }) {
@@ -558,6 +560,9 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                         <p className="mt-1 text-sm text-slate-600">
                           {submission.submission_type} - {submission.municipality}
                         </p>
+                        {submission.description && (
+                          <p className="mt-2 text-sm text-slate-600">{submission.description}</p>
+                        )}
                       </div>
                       <StatusBadge status={submission.status} />
                     </article>
@@ -809,6 +814,22 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                 onChange={(event) => setSubmissionForm((current) => ({ ...current, municipality: event.target.value }))}
                 placeholder="Bulusan"
                 value={submissionForm.municipality}
+              />
+              <label className="grid gap-1">
+                <span className="text-sm font-extrabold text-slate-500">Description</span>
+                <textarea
+                  className="min-h-28 rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+                  onChange={(event) => setSubmissionForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="What should admins know about this place, route, or activity?"
+                  value={submissionForm.description}
+                />
+              </label>
+              <Field
+                label="Contact info"
+                name="contact_info"
+                onChange={(event) => setSubmissionForm((current) => ({ ...current, contact_info: event.target.value }))}
+                placeholder="Phone, page, email, or local contact"
+                value={submissionForm.contact_info}
               />
               <button
                 className="min-h-11 rounded-lg bg-sea px-4 font-extrabold text-white disabled:opacity-60"

@@ -191,7 +191,7 @@ export function useUserDashboardData(user) {
           .order('created_at', { ascending: false }),
         supabase
           .from('submissions')
-          .select('submission_type, name, municipality, status, submitted_at')
+          .select('submission_type, name, municipality, description, contact_info, status, submitted_at')
           .eq('submitter_email', user.email)
           .order('submitted_at', { ascending: false }),
       ]);
@@ -261,10 +261,12 @@ export function useUserDashboardData(user) {
         submission_type: submission.submission_type,
         name: submission.name.trim(),
         municipality: submission.municipality.trim(),
+        description: submission.description.trim() || null,
+        contact_info: submission.contact_info.trim() || null,
         status: 'pending',
         submitter_email: user.email,
       })
-      .select('submission_type, name, municipality, status, submitted_at')
+      .select('submission_type, name, municipality, description, contact_info, status, submitted_at')
       .single();
 
     if (error) return { error };
