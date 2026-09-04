@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FaCheck, FaEye, FaFilter, FaRedoAlt, FaTimes } from 'react-icons/fa';
+import { FaCheck, FaEye, FaFilter, FaRedoAlt, FaTimes, FaTrash } from 'react-icons/fa';
 import ShellCard from '../../../components/shared/ShellCard.jsx';
 import { supabase } from '../../../lib/supabaseClient';
 
@@ -27,9 +27,11 @@ export default function SubmissionsManager() {
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [statusFilter, setStatusFilter] = useState('pending');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
   const [convertingId, setConvertingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [message, setMessage] = useState('');
 
   const submissionTypes = useMemo(() => {
@@ -42,9 +44,23 @@ export default function SubmissionsManager() {
         statusFilter === 'all' || normalizeStatus(submission.status) === statusFilter;
       const matchesType =
         typeFilter === 'all' || normalizeType(submission.submission_type) === normalizeType(typeFilter);
-      return matchesStatus && matchesType;
+      const query = search.trim().toLowerCase();
+      const matchesSearch =
+        !query ||
+        [
+          submission.name,
+          submission.municipality,
+          submission.submission_type,
+          submission.description,
+          submission.contact_info,
+          submission.submitter_email,
+        ]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(query));
+
+      return matchesStatus && matchesType && matchesSearch;
     });
-  }, [statusFilter, submissions, typeFilter]);
+  }, [search, statusFilter, submissions, typeFilter]);
 
   const statusCounts = useMemo(() => {
     return submissions.reduce(
@@ -182,6 +198,31 @@ export default function SubmissionsManager() {
     setMessage(`${submission.name} was created as an unpublished ${submissionType} draft.`);
   }
 
+  async function deleteSubmission(submission) {
+    if (!submission.id) {
+      setMessage('This submission has no id, so it cannot be deleted from the dashboard.');
+      return;
+    }
+
+    const shouldDelete = window.confirm('Delete this submission permanently?');
+    if (!shouldDelete) return;
+
+    setDeletingId(submission.id);
+    setMessage('');
+
+    const { error } = await supabase.from('submissions').delete().eq('id', submission.id);
+
+    setDeletingId(null);
+
+    if (error) {
+      setMessage(`Unable to delete submission: ${error.message}`);
+      return;
+    }
+
+    setSubmissions((current) => current.filter((item) => item.id !== submission.id));
+    setSelectedSubmission((current) => (current?.id === submission.id ? null : current));
+  }
+
   function renderStatusBadge(statusValue) {
     const status = normalizeStatus(statusValue);
     const classes = {
@@ -234,7 +275,17 @@ export default function SubmissionsManager() {
           </button>
         </div>
 
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_210px_240px]">
+          <label className="grid gap-1">
+            <span className="text-sm font-extrabold text-slate-500">Search</span>
+            <input
+              className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm text-ink outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search submissions"
+              type="search"
+              value={search}
+            />
+          </label>
           <label className="grid gap-1 sm:w-52">
             <span className="inline-flex items-center gap-2 text-sm font-extrabold text-slate-500">
               <FaFilter aria-hidden="true" />
@@ -328,7 +379,7 @@ export default function SubmissionsManager() {
                     {canCreateDraft && (
                       <button
                         className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-ink px-3 text-sm font-extrabold text-white disabled:opacity-60"
-                        disabled={convertingId === submission.id || updatingId === submission.id}
+                        disabled={convertingId === submission.id || updatingId === submission.id || deletingId === submission.id}
                         onClick={() => createDraftListing(submission)}
                         type="button"
                       >
@@ -338,7 +389,7 @@ export default function SubmissionsManager() {
                     )}
                     <button
                       className="grid min-h-10 min-w-10 place-items-center rounded-lg bg-sea px-3 text-sm font-extrabold text-white disabled:opacity-60"
-                      disabled={updatingId === submission.id || convertingId === submission.id}
+                      disabled={updatingId === submission.id || convertingId === submission.id || deletingId === submission.id}
                       onClick={() => updateSubmissionStatus(submission, 'approved')}
                       title="Approve submission"
                       type="button"
@@ -347,12 +398,21 @@ export default function SubmissionsManager() {
                     </button>
                     <button
                       className="grid min-h-10 min-w-10 place-items-center rounded-lg bg-rose-600 px-3 text-sm font-extrabold text-white disabled:opacity-60"
-                      disabled={updatingId === submission.id || convertingId === submission.id}
+                      disabled={updatingId === submission.id || convertingId === submission.id || deletingId === submission.id}
                       onClick={() => updateSubmissionStatus(submission, 'rejected')}
                       title="Reject submission"
                       type="button"
                     >
                       <FaTimes aria-hidden="true" />
+                    </button>
+                    <button
+                      className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-rose-200 bg-white px-3 text-sm font-extrabold text-rose-700 disabled:opacity-60"
+                      disabled={updatingId === submission.id || convertingId === submission.id || deletingId === submission.id}
+                      onClick={() => deleteSubmission(submission)}
+                      title="Delete submission"
+                      type="button"
+                    >
+                      <FaTrash aria-hidden="true" />
                     </button>
                   </div>
                 </article>
@@ -422,7 +482,7 @@ export default function SubmissionsManager() {
             <div className="mt-6 flex flex-wrap gap-2">
               <button
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sea px-4 text-sm font-extrabold text-white disabled:opacity-60"
-                disabled={updatingId === selectedSubmission.id || convertingId === selectedSubmission.id}
+                disabled={updatingId === selectedSubmission.id || convertingId === selectedSubmission.id || deletingId === selectedSubmission.id}
                 onClick={() => updateSubmissionStatus(selectedSubmission, 'approved')}
                 type="button"
               >
@@ -431,7 +491,7 @@ export default function SubmissionsManager() {
               </button>
               <button
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-rose-600 px-4 text-sm font-extrabold text-white disabled:opacity-60"
-                disabled={updatingId === selectedSubmission.id || convertingId === selectedSubmission.id}
+                disabled={updatingId === selectedSubmission.id || convertingId === selectedSubmission.id || deletingId === selectedSubmission.id}
                 onClick={() => updateSubmissionStatus(selectedSubmission, 'rejected')}
                 type="button"
               >
@@ -449,6 +509,15 @@ export default function SubmissionsManager() {
                   {convertingId === selectedSubmission.id ? 'Creating...' : 'Create draft listing'}
                 </button>
               )}
+              <button
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 text-sm font-extrabold text-rose-700 disabled:opacity-60"
+                disabled={updatingId === selectedSubmission.id || convertingId === selectedSubmission.id || deletingId === selectedSubmission.id}
+                onClick={() => deleteSubmission(selectedSubmission)}
+                type="button"
+              >
+                <FaTrash aria-hidden="true" />
+                {deletingId === selectedSubmission.id ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </section>
         </div>
