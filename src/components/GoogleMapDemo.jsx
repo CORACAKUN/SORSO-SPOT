@@ -21,6 +21,8 @@ const minimumMapLoadingDuration = 450;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const fallbackImage =
   'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=900&q=80';
+const emptySavedIds = new Set();
+const emptyReviews = [];
 
 let googleMapsPromise;
 let leafletPromise;
@@ -54,12 +56,12 @@ function loadLeaflet() {
 }
 
 export default function GoogleMapDemo({
-  approvedReviews = [],
+  approvedReviews = emptyReviews,
   destinations,
   onToggleAccommodationFavorite,
   onToggleFavorite,
-  savedAccommodationIds = new Set(),
-  savedDestinationSlugs = new Set(),
+  savedAccommodationIds = emptySavedIds,
+  savedDestinationSlugs = emptySavedIds,
 }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);

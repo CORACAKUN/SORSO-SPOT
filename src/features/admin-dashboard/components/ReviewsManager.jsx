@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FaCheck, FaRedoAlt, FaTimes } from 'react-icons/fa';
+import { FaCheck, FaRedoAlt, FaTimes, FaTrash } from 'react-icons/fa';
 import ShellCard from '../../../components/shared/ShellCard.jsx';
 import { supabase } from '../../../lib/supabaseClient';
 
@@ -12,14 +12,27 @@ function normalizeStatus(value) {
 export default function ReviewsManager() {
   const [reviews, setReviews] = useState([]);
   const [statusFilter, setStatusFilter] = useState('pending');
+  const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [message, setMessage] = useState('');
 
   const filteredReviews = useMemo(() => {
-    if (statusFilter === 'all') return reviews;
-    return reviews.filter((review) => normalizeStatus(review.status) === statusFilter);
-  }, [reviews, statusFilter]);
+    const query = search.trim().toLowerCase();
+
+    return reviews.filter((review) => {
+      const matchesStatus =
+        statusFilter === 'all' || normalizeStatus(review.status) === statusFilter;
+      const matchesSearch =
+        !query ||
+        [review.destination_slug, review.title, review.body, review.user_email]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(query));
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [reviews, search, statusFilter]);
 
   const counts = useMemo(() => {
     return reviews.reduce(
@@ -79,6 +92,30 @@ export default function ReviewsManager() {
     setReviews((current) => current.map((item) => (item.id === review.id ? data : item)));
   }
 
+  async function deleteReview(review) {
+    if (!review.id) {
+      setMessage('This review has no id, so it cannot be deleted from the dashboard.');
+      return;
+    }
+
+    const shouldDelete = window.confirm('Delete this review permanently?');
+    if (!shouldDelete) return;
+
+    setDeletingId(review.id);
+    setMessage('');
+
+    const { error } = await supabase.from('reviews').delete().eq('id', review.id);
+
+    setDeletingId(null);
+
+    if (error) {
+      setMessage(`Unable to delete review: ${error.message}`);
+      return;
+    }
+
+    setReviews((current) => current.filter((item) => item.id !== review.id));
+  }
+
   return (
     <div className="grid gap-6">
       <section className="grid gap-4 md:grid-cols-4">
@@ -105,6 +142,13 @@ export default function ReviewsManager() {
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20 md:w-72"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search reviews"
+              type="search"
+              value={search}
+            />
             <select
               className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
               onChange={(event) => setStatusFilter(event.target.value)}
@@ -143,13 +187,17 @@ export default function ReviewsManager() {
                   </span>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-sea px-3 text-sm font-extrabold text-white disabled:opacity-60" disabled={updatingId === review.id} onClick={() => updateStatus(review, 'approved')} type="button">
+                  <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-sea px-3 text-sm font-extrabold text-white disabled:opacity-60" disabled={updatingId === review.id || deletingId === review.id} onClick={() => updateStatus(review, 'approved')} type="button">
                     <FaCheck aria-hidden="true" />
                     Approve
                   </button>
-                  <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-rose-600 px-3 text-sm font-extrabold text-white disabled:opacity-60" disabled={updatingId === review.id} onClick={() => updateStatus(review, 'rejected')} type="button">
+                  <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-rose-600 px-3 text-sm font-extrabold text-white disabled:opacity-60" disabled={updatingId === review.id || deletingId === review.id} onClick={() => updateStatus(review, 'rejected')} type="button">
                     <FaTimes aria-hidden="true" />
                     Reject
+                  </button>
+                  <button className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-sm font-extrabold text-rose-700 disabled:opacity-60" disabled={updatingId === review.id || deletingId === review.id} onClick={() => deleteReview(review)} type="button">
+                    <FaTrash aria-hidden="true" />
+                    {deletingId === review.id ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </article>
