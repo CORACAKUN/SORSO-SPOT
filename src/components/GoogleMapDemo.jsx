@@ -73,6 +73,20 @@ export default function GoogleMapDemo({
     return Number.isFinite(Number(destination.latitude)) && Number.isFinite(Number(destination.longitude));
   });
 
+  function getPlaceKey(destination) {
+    return destination.map_key || destination.slug;
+  }
+
+  function getPlaceTypeLabel(destination) {
+    return destination.map_type === 'accommodation' ? 'Accommodation' : 'Tourist spot';
+  }
+
+  function getPopupMeta(destination) {
+    return destination.map_type === 'accommodation'
+      ? `Price: ${destination.price_range || 'Contact listing'}`
+      : `Best time: ${destination.best_time || 'Year-round'}`;
+  }
+
   function escapeHtml(value) {
     return String(value || '')
       .replaceAll('&', '&amp;')
@@ -96,10 +110,10 @@ export default function GoogleMapDemo({
           </p>
           <strong style="display: block; font-size: 17px; line-height: 1.15;">${escapeHtml(destination.name)}</strong>
           <p style="margin: 8px 0 0; color: #5d6a67; font-size: 13px;">
-            Best time: ${escapeHtml(destination.best_time || 'Year-round')}
+            ${escapeHtml(getPopupMeta(destination))}
           </p>
           <button
-            data-sorso-details-slug="${escapeHtml(destination.slug)}"
+            data-sorso-details-key="${escapeHtml(getPlaceKey(destination))}"
             type="button"
             style="margin-top: 12px; width: 100%; border: 0; border-radius: 8px; background: #116d75; color: white; min-height: 36px; font-weight: 900; cursor: pointer;"
           >
@@ -112,10 +126,10 @@ export default function GoogleMapDemo({
 
   useEffect(() => {
     function handleDetailsClick(event) {
-      const button = event.target.closest('[data-sorso-details-slug]');
+      const button = event.target.closest('[data-sorso-details-key]');
       if (!button) return;
 
-      const destination = destinations.find((item) => item.slug === button.dataset.sorsoDetailsSlug);
+      const destination = destinations.find((item) => getPlaceKey(item) === button.dataset.sorsoDetailsKey);
       if (destination) setSelectedDestination(destination);
     }
 
@@ -126,7 +140,7 @@ export default function GoogleMapDemo({
   function openDestination(destination) {
     if (provider === 'leaflet') {
       const map = leafletMapRef.current;
-      const marker = leafletMarkerRefs.current[destination.slug];
+      const marker = leafletMarkerRefs.current[getPlaceKey(destination)];
 
       if (!map || !marker) return;
 
@@ -165,7 +179,7 @@ export default function GoogleMapDemo({
 
     const map = mapInstanceRef.current;
     const infoWindow = infoWindowRef.current;
-    const marker = markerRefs.current[destination.slug];
+    const marker = markerRefs.current[getPlaceKey(destination)];
 
     if (!map || !infoWindow || !marker) return;
 
@@ -240,11 +254,19 @@ export default function GoogleMapDemo({
         iconSize: [18, 18],
         popupAnchor: [0, -8],
       });
+      const accommodationIcon = leaflet.divIcon({
+        className: '',
+        html:
+          '<span style="display:grid;width:24px;height:24px;place-items:center;border-radius:8px;background:#116d75;border:3px solid #fff;box-shadow:0 6px 16px rgba(19,32,31,.28);color:#fff;font-size:11px;font-weight:900;">A</span>',
+        iconAnchor: [12, 12],
+        iconSize: [24, 24],
+        popupAnchor: [0, -10],
+      });
 
       validDestinations.forEach((destination) => {
         const marker = leaflet
           .marker([Number(destination.latitude), Number(destination.longitude)], {
-            icon: markerIcon,
+            icon: destination.map_type === 'accommodation' ? accommodationIcon : markerIcon,
             title: destination.name,
           })
           .addTo(map);
@@ -254,7 +276,7 @@ export default function GoogleMapDemo({
           maxWidth: 280,
           minWidth: 260,
         });
-        leafletMarkerRefs.current[destination.slug] = marker;
+        leafletMarkerRefs.current[getPlaceKey(destination)] = marker;
       });
 
       window.setTimeout(() => map.invalidateSize(), 0);
@@ -324,14 +346,14 @@ export default function GoogleMapDemo({
             title: destination.name,
             icon: {
               path: maps.SymbolPath.CIRCLE,
-              scale: 9,
-              fillColor: '#d96945',
+              scale: destination.map_type === 'accommodation' ? 10 : 9,
+              fillColor: destination.map_type === 'accommodation' ? '#116d75' : '#d96945',
               fillOpacity: 1,
               strokeColor: '#ffffff',
               strokeWeight: 3,
             },
           });
-          markerRefs.current[destination.slug] = marker;
+          markerRefs.current[getPlaceKey(destination)] = marker;
 
           marker.addListener('click', () => {
             openDestination(destination);
@@ -364,20 +386,21 @@ export default function GoogleMapDemo({
     return (
       <aside className="absolute inset-x-3 bottom-3 z-[1000] max-h-[240px] overflow-y-auto rounded-lg bg-white/95 p-3 shadow-travel backdrop-blur md:inset-x-auto md:bottom-auto md:right-4 md:top-4 md:max-h-[calc(100%-32px)] md:w-80">
         <div className="mb-3">
-          <h3 className="text-xl font-black">Sorsogon spots</h3>
+          <h3 className="text-xl font-black">Sorsogon map</h3>
         </div>
 
         <div className="grid gap-2">
           {validDestinations.length ? (
             validDestinations.map((destination) => {
-              const isSaved = savedDestinationSlugs.has(destination.slug);
+              const isSaveable = destination.is_saveable !== false;
+              const isSaved = isSaveable && savedDestinationSlugs.has(destination.slug);
 
               return (
                 <button
                   className={`grid gap-3 rounded-lg p-2 text-left hover:bg-mist ${
-                    canSaveDestinations ? 'grid-cols-[64px_1fr_28px]' : 'grid-cols-[64px_1fr]'
+                    canSaveDestinations && isSaveable ? 'grid-cols-[64px_1fr_28px]' : 'grid-cols-[64px_1fr]'
                   }`}
-                  key={destination.slug}
+                  key={getPlaceKey(destination)}
                   onClick={() => openDestination(destination)}
                   type="button"
                 >
@@ -392,7 +415,7 @@ export default function GoogleMapDemo({
                       {destination.municipality || 'Sorsogon'}
                     </span>
                     <span className="mt-1 block truncate text-xs text-slate-500">
-                      {destination.category || 'Tourist spot'}
+                      {destination.category || getPlaceTypeLabel(destination)}
                     </span>
                     <span
                       className="mt-2 inline-flex text-xs font-black text-sea"
@@ -404,7 +427,7 @@ export default function GoogleMapDemo({
                       View details
                     </span>
                   </span>
-                  {canSaveDestinations && (
+                  {canSaveDestinations && isSaveable && (
                     <span
                       className={`grid size-8 place-items-center rounded-lg ${
                         isSaved ? 'bg-sun/25 text-ink' : 'bg-mist text-slate-500'
@@ -419,7 +442,7 @@ export default function GoogleMapDemo({
             })
           ) : (
             <p className="rounded-lg bg-mist p-3 text-sm font-semibold text-slate-600">
-              Add latitude and longitude to destinations to show map markers.
+              Add latitude and longitude to destinations or accommodations to show map markers.
             </p>
           )}
         </div>
@@ -440,38 +463,62 @@ export default function GoogleMapDemo({
 
   const isGooglePaused = provider === 'google' && !isGoogleEnabled;
   const destinationDetails = selectedDestination
-    ? [
-        {
-          icon: FaRegCalendarAlt,
-          label: 'Best time',
-          value: selectedDestination.best_time,
-        },
-        {
-          icon: FaClock,
-          label: 'Opening hours',
-          value: selectedDestination.opening_hours,
-        },
-        {
-          icon: FaCoins,
-          label: 'Entrance fee',
-          value: selectedDestination.entrance_fee,
-        },
-        {
-          icon: FaMapMarkerAlt,
-          label: 'Address',
-          value: selectedDestination.address,
-        },
-        {
-          icon: FaPhoneAlt,
-          label: 'Contact',
-          value: selectedDestination.contact_info,
-        },
-        {
-          icon: FaCompass,
-          label: 'Travel tips',
-          value: selectedDestination.travel_tips,
-        },
-      ].filter((item) => item.value)
+    ? (selectedDestination.map_type === 'accommodation'
+        ? [
+            {
+              icon: FaCoins,
+              label: 'Price range',
+              value: selectedDestination.price_range,
+            },
+            {
+              icon: FaCompass,
+              label: 'Amenities',
+              value: selectedDestination.amenities,
+            },
+            {
+              icon: FaMapMarkerAlt,
+              label: 'Address',
+              value: selectedDestination.address,
+            },
+            {
+              icon: FaPhoneAlt,
+              label: 'Contact',
+              value: selectedDestination.contact_info,
+            },
+          ]
+        : [
+            {
+              icon: FaRegCalendarAlt,
+              label: 'Best time',
+              value: selectedDestination.best_time,
+            },
+            {
+              icon: FaClock,
+              label: 'Opening hours',
+              value: selectedDestination.opening_hours,
+            },
+            {
+              icon: FaCoins,
+              label: 'Entrance fee',
+              value: selectedDestination.entrance_fee,
+            },
+            {
+              icon: FaMapMarkerAlt,
+              label: 'Address',
+              value: selectedDestination.address,
+            },
+            {
+              icon: FaPhoneAlt,
+              label: 'Contact',
+              value: selectedDestination.contact_info,
+            },
+            {
+              icon: FaCompass,
+              label: 'Travel tips',
+              value: selectedDestination.travel_tips,
+            },
+          ]
+      ).filter((item) => item.value)
     : [];
   const isSelectedDestinationSaved = selectedDestination
     ? savedDestinationSlugs.has(selectedDestination.slug)
@@ -593,7 +640,7 @@ export default function GoogleMapDemo({
             <div className="p-5 sm:p-6">
               <p className="text-xs font-black uppercase text-sea">
                 {selectedDestination.municipality || 'Sorsogon'} -{' '}
-                {selectedDestination.category || 'Tourist spot'}
+                {selectedDestination.category || getPlaceTypeLabel(selectedDestination)}
               </p>
               <h2 className="mt-2 text-3xl font-black leading-none">
                 {selectedDestination.name}
@@ -604,7 +651,7 @@ export default function GoogleMapDemo({
                 </p>
               )}
 
-              {onToggleFavorite && (
+              {onToggleFavorite && selectedDestination.is_saveable !== false && (
                 <button
                   className={`mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-extrabold ${
                     isSelectedDestinationSaved

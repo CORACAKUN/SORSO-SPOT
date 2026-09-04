@@ -10,11 +10,13 @@ const emptyForm = {
   price_range: '',
   amenities: '',
   contact_info: '',
+  latitude: '',
+  longitude: '',
   image_url: '',
   is_published: true,
 };
 
-function TextField({ label, name, onChange, placeholder, value, type = 'text' }) {
+function TextField({ label, name, onChange, placeholder, step, value, type = 'text' }) {
   return (
     <label className="grid gap-1">
       <span className="text-sm font-extrabold text-slate-500">{label}</span>
@@ -23,6 +25,7 @@ function TextField({ label, name, onChange, placeholder, value, type = 'text' })
         name={name}
         onChange={onChange}
         placeholder={placeholder}
+        step={step}
         type={type}
         value={value}
       />
@@ -57,7 +60,7 @@ export default function AccommodationsManager() {
 
     const { data, error } = await supabase
       .from('accommodations')
-      .select('id, name, municipality, accommodation_type, price_range, amenities, contact_info, image_url, is_published, created_at')
+      .select('id, name, municipality, accommodation_type, price_range, amenities, contact_info, latitude, longitude, image_url, is_published, created_at')
       .order('name', { ascending: true });
 
     if (error) {
@@ -93,6 +96,8 @@ export default function AccommodationsManager() {
       price_range: item.price_range || '',
       amenities: item.amenities || '',
       contact_info: item.contact_info || '',
+      latitude: item.latitude ?? '',
+      longitude: item.longitude ?? '',
       image_url: item.image_url || '',
       is_published: Boolean(item.is_published),
     });
@@ -115,8 +120,6 @@ export default function AccommodationsManager() {
       return;
     }
 
-    setIsSaving(true);
-    setMessage('');
     const payload = {
       ...form,
       name: form.name.trim(),
@@ -125,8 +128,21 @@ export default function AccommodationsManager() {
       price_range: form.price_range.trim() || null,
       amenities: form.amenities.trim() || null,
       contact_info: form.contact_info.trim() || null,
+      latitude: form.latitude === '' ? null : Number(form.latitude),
+      longitude: form.longitude === '' ? null : Number(form.longitude),
       image_url: form.image_url.trim() || null,
     };
+
+    if (
+      (payload.latitude !== null && Number.isNaN(payload.latitude)) ||
+      (payload.longitude !== null && Number.isNaN(payload.longitude))
+    ) {
+      setMessage('Latitude and longitude must be valid numbers.');
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage('');
 
     const result = editingId
       ? await supabase.from('accommodations').update(payload).eq('id', editingId).select().single()
@@ -248,6 +264,11 @@ export default function AccommodationsManager() {
                   <p className="mt-1 text-xs font-semibold text-slate-500">
                     {item.price_range || 'No price range'}
                   </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude))
+                      ? `${item.latitude}, ${item.longitude}`
+                      : 'No coordinates'}
+                  </p>
                 </div>
                 <span
                   className={`w-fit rounded-lg px-3 py-2 text-xs font-black ${
@@ -328,6 +349,10 @@ export default function AccommodationsManager() {
               </div>
               <TextField label="Amenities" name="amenities" onChange={handleChange} placeholder="WiFi, parking, pool" value={form.amenities} />
               <TextField label="Contact info" name="contact_info" onChange={handleChange} placeholder="Phone or Facebook page" value={form.contact_info} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField label="Latitude" name="latitude" onChange={handleChange} placeholder="12.9742" step="any" type="number" value={form.latitude} />
+                <TextField label="Longitude" name="longitude" onChange={handleChange} placeholder="123.9937" step="any" type="number" value={form.longitude} />
+              </div>
               <TextField label="Image URL" name="image_url" onChange={handleChange} placeholder="https://example.com/photo.jpg" type="url" value={form.image_url} />
               <label className="flex min-h-11 items-center gap-3 rounded-lg bg-mist px-3 text-sm font-extrabold text-ink">
                 <input checked={form.is_published} className="size-4 accent-teal-700" name="is_published" onChange={handleChange} type="checkbox" />

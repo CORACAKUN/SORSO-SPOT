@@ -1,5 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  FaBookmark,
+  FaChevronLeft,
+  FaChevronRight,
+  FaMapMarkedAlt,
+  FaPaperPlane,
+  FaPlus,
+  FaRegStar,
+  FaRoute,
+  FaStar,
+  FaTimes,
+  FaTrash,
+  FaUserCircle,
+} from 'react-icons/fa';
 import DashboardPanel from '../../components/shared/DashboardPanel.jsx';
 import EmptyState from '../../components/shared/EmptyState.jsx';
 import { supabase } from '../../lib/supabaseClient';
@@ -7,26 +20,75 @@ import GoogleMapDemo from '../../components/GoogleMapDemo.jsx';
 import { useUserDashboardData } from './useUserDashboardData';
 
 const tabs = [
-  { id: 'explore', label: 'Explore', icon: 'EX' },
-  { id: 'reviews', label: 'Reviews', icon: 'RV' },
-  { id: 'submissions', label: 'Submissions', icon: 'SB' },
-  { id: 'travel', label: 'Travel Plans', icon: 'TP' },
-  { id: 'account', label: 'Account', icon: 'AC' },
-  { id: 'saved', label: 'Saved Places', icon: 'SP' },
+  { id: 'explore', label: 'Explore', icon: FaMapMarkedAlt },
+  { id: 'reviews', label: 'Reviews', icon: FaRegStar },
+  { id: 'submissions', label: 'Submissions', icon: FaPaperPlane },
+  { id: 'travel', label: 'Travel Plans', icon: FaRoute },
+  { id: 'account', label: 'Account', icon: FaUserCircle },
+  { id: 'saved', label: 'Saved Places', icon: FaBookmark },
 ];
 
-const tripPlan = [
-  ['Day 1', 'Sorsogon City arrival, food stops, and baywalk sunset.'],
-  ['Day 2', 'Bulusan Lake kayaking, nature walk, and nearby viewpoints.'],
-  ['Day 3', 'Matnog island hopping or Donsol wildlife tour.'],
-];
+const emptyReviewForm = {
+  destination_slug: '',
+  rating: 5,
+  title: '',
+  body: '',
+};
+
+const emptySubmissionForm = {
+  submission_type: 'destination',
+  name: '',
+  municipality: '',
+};
+
+function Field({ label, name, onChange, placeholder, value, type = 'text' }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-sm font-extrabold text-slate-500">{label}</span>
+      <input
+        className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+        name={name}
+        onChange={onChange}
+        placeholder={placeholder}
+        type={type}
+        value={value}
+      />
+    </label>
+  );
+}
+
+function StatusBadge({ status }) {
+  const normalizedStatus = String(status || 'pending').trim().toLowerCase();
+  const classes = {
+    approved: 'bg-emerald-50 text-emerald-700',
+    pending: 'bg-amber-50 text-amber-800',
+    rejected: 'bg-rose-50 text-rose-700',
+  };
+
+  return (
+    <span className={`w-fit rounded-lg px-3 py-2 text-xs font-black uppercase ${classes[normalizedStatus] || 'bg-slate-100 text-slate-600'}`}>
+      {normalizedStatus}
+    </span>
+  );
+}
 
 export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBack }) {
   const [activeTab, setActiveTab] = useState('explore');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [reviewForm, setReviewForm] = useState(emptyReviewForm);
+  const [submissionForm, setSubmissionForm] = useState(emptySubmissionForm);
+  const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);
+  const [isSubmissionFormOpen, setIsSubmissionFormOpen] = useState(false);
+  const [isSavingReview, setIsSavingReview] = useState(false);
+  const [isSavingSubmission, setIsSavingSubmission] = useState(false);
+  const [travelPlans, setTravelPlans] = useState([]);
+  const [travelForm, setTravelForm] = useState({ day: 'Day 1', destination_slug: '', notes: '' });
   const {
+    accommodations,
+    addReview,
+    addSubmission,
     destinations,
     isLoading,
     message,
@@ -39,6 +101,47 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
   } = useUserDashboardData(user);
 
   const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Traveler';
+  const destinationOptions = useMemo(
+    () => destinations.map((destination) => ({
+      label: destination.name,
+      slug: destination.slug,
+      municipality: destination.municipality,
+    })),
+    [destinations],
+  );
+
+  const destinationBySlug = useMemo(() => {
+    return destinations.reduce((map, destination) => {
+      map[destination.slug] = destination;
+      return map;
+    }, {});
+  }, [destinations]);
+
+  const mapPlaces = useMemo(() => {
+    const destinationPlaces = destinations.map((destination) => ({
+      ...destination,
+      map_type: 'destination',
+      map_key: `destination:${destination.slug}`,
+      is_saveable: true,
+    }));
+    const accommodationPlaces = accommodations.map((accommodation) => ({
+      ...accommodation,
+      map_type: 'accommodation',
+      map_key: `accommodation:${accommodation.id || accommodation.slug || accommodation.name}`,
+      category: accommodation.accommodation_type || 'Accommodation',
+      best_time: accommodation.price_range,
+      opening_hours: null,
+      entrance_fee: accommodation.price_range,
+      travel_tips: accommodation.amenities,
+      description:
+        accommodation.amenities || accommodation.price_range
+          ? [accommodation.price_range, accommodation.amenities].filter(Boolean).join(' - ')
+          : 'Published accommodation listing.',
+      is_saveable: false,
+    }));
+
+    return [...destinationPlaces, ...accommodationPlaces];
+  }, [accommodations, destinations]);
 
   useEffect(() => {
     const welcomeKey = `sorso-dashboard-welcome-${user.id}`;
@@ -47,6 +150,32 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
       window.sessionStorage.setItem(welcomeKey, 'seen');
     }
   }, [user.id]);
+
+  useEffect(() => {
+    if (destinationOptions.length && !reviewForm.destination_slug) {
+      setReviewForm((current) => ({ ...current, destination_slug: destinationOptions[0].slug }));
+    }
+    if (destinationOptions.length && !travelForm.destination_slug) {
+      setTravelForm((current) => ({ ...current, destination_slug: destinationOptions[0].slug }));
+    }
+  }, [destinationOptions, reviewForm.destination_slug, travelForm.destination_slug]);
+
+  useEffect(() => {
+    const storageKey = `sorso-travel-plans-${user.id}`;
+    const savedPlans = window.localStorage.getItem(storageKey);
+    if (savedPlans) {
+      try {
+        setTravelPlans(JSON.parse(savedPlans));
+      } catch {
+        setTravelPlans([]);
+      }
+    }
+  }, [user.id]);
+
+  useEffect(() => {
+    const storageKey = `sorso-travel-plans-${user.id}`;
+    window.localStorage.setItem(storageKey, JSON.stringify(travelPlans));
+  }, [travelPlans, user.id]);
 
   async function handleSignOut() {
     if (!supabase) return;
@@ -58,27 +187,131 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
     if (error) setMessage(error.message);
   }
 
+  function openReviewForm(destinationSlug = '') {
+    setReviewForm({
+      ...emptyReviewForm,
+      destination_slug: destinationSlug || destinationOptions[0]?.slug || '',
+    });
+    setIsReviewFormOpen(true);
+    setMessage('');
+  }
+
+  async function submitReview(event) {
+    event.preventDefault();
+    if (!reviewForm.destination_slug || !reviewForm.title.trim() || !reviewForm.body.trim()) {
+      setMessage('Destination, title, and review text are required.');
+      return;
+    }
+
+    setIsSavingReview(true);
+    const { error } = await addReview(reviewForm);
+    setIsSavingReview(false);
+
+    if (error) {
+      setMessage(`Unable to submit review: ${error.message}`);
+      return;
+    }
+
+    setIsReviewFormOpen(false);
+    setReviewForm(emptyReviewForm);
+    setMessage('Review submitted. It will appear publicly after admin approval.');
+  }
+
+  async function submitPlace(event) {
+    event.preventDefault();
+    if (!submissionForm.name.trim() || !submissionForm.municipality.trim()) {
+      setMessage('Place name and municipality are required.');
+      return;
+    }
+
+    setIsSavingSubmission(true);
+    const { error } = await addSubmission(submissionForm);
+    setIsSavingSubmission(false);
+
+    if (error) {
+      setMessage(`Unable to submit place: ${error.message}`);
+      return;
+    }
+
+    setIsSubmissionFormOpen(false);
+    setSubmissionForm(emptySubmissionForm);
+    setMessage('Submission sent. Admin will review it before publishing.');
+  }
+
+  function addTravelPlan(event) {
+    event.preventDefault();
+    if (!travelForm.destination_slug) {
+      setMessage('Choose a destination for the travel plan.');
+      return;
+    }
+
+    setTravelPlans((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        ...travelForm,
+      },
+    ]);
+    setTravelForm({ day: `Day ${travelPlans.length + 2}`, destination_slug: destinationOptions[0]?.slug || '', notes: '' });
+    setMessage('');
+  }
+
+  function removeTravelPlan(id) {
+    setTravelPlans((current) => current.filter((plan) => plan.id !== id));
+  }
+
   function renderSavedPlaces() {
     return (
-      <DashboardPanel>
+      <DashboardPanel eyebrow="Saved places" title="Your bookmarked spots">
         <div className="grid gap-3">
           {isLoading ? (
             <EmptyState text="Loading saved places..." />
           ) : savedDestinations.length ? (
             savedDestinations.map((favorite) => (
               <article
-                className="grid gap-3 rounded-lg bg-mist p-4 md:grid-cols-[1fr_auto] md:items-center"
+                className="grid gap-4 rounded-lg bg-mist p-4 lg:grid-cols-[96px_1fr_auto] lg:items-center"
                 key={`${favorite.destination_slug}-${favorite.created_at}`}
               >
+                <img
+                  alt=""
+                  className="h-20 w-full rounded-lg bg-white object-cover lg:h-16"
+                  src={destinationBySlug[favorite.destination_slug]?.image_url || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80'}
+                />
                 <div>
                   <h3 className="font-black">{favorite.title}</h3>
                   <p className="mt-1 text-sm text-slate-600">
                     {favorite.location} - {favorite.category} - Best time: {favorite.bestTime}
                   </p>
                 </div>
-                <span className="rounded-lg bg-white px-3 py-2 text-sm font-black text-sea">
-                  Saved
-                </span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-white px-3 text-sm font-extrabold text-ink"
+                    onClick={() => openReviewForm(favorite.destination_slug)}
+                    type="button"
+                  >
+                    <FaStar aria-hidden="true" />
+                    Review
+                  </button>
+                  <button
+                    className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-sea px-3 text-sm font-extrabold text-white"
+                    onClick={() => {
+                      setTravelForm((current) => ({ ...current, destination_slug: favorite.destination_slug }));
+                      setActiveTab('travel');
+                    }}
+                    type="button"
+                  >
+                    <FaRoute aria-hidden="true" />
+                    Plan
+                  </button>
+                  <button
+                    aria-label={`Remove ${favorite.title} from saved places`}
+                    className="grid min-h-10 min-w-10 place-items-center rounded-lg bg-white text-rose-700"
+                    onClick={() => toggleFavorite(favorite.destination_slug)}
+                    type="button"
+                  >
+                    <FaTrash aria-hidden="true" />
+                  </button>
+                </div>
               </article>
             ))
           ) : (
@@ -166,7 +399,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                     activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-mist text-sea'
                   }`}
                 >
-                  {tab.icon}
+                  {React.createElement(tab.icon, { 'aria-hidden': 'true' })}
                 </span>
                 {isSidebarOpen && <span className="truncate">{tab.label}</span>}
               </button>
@@ -199,7 +432,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
           {activeTab === 'explore' && (
             <DashboardPanel>
               <GoogleMapDemo
-                destinations={destinations}
+                destinations={mapPlaces}
                 onToggleFavorite={toggleFavorite}
                 savedDestinationSlugs={savedDestinationSlugs}
               />
@@ -207,8 +440,42 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
           )}
 
           {activeTab === 'reviews' && (
-            <DashboardPanel>
-              <div className="grid gap-3">
+            <div className="grid gap-6">
+              <section className="grid gap-4 md:grid-cols-3">
+                <DashboardPanel>
+                  <p className="text-xs font-black uppercase text-slate-500">Total reviews</p>
+                  <p className="mt-2 text-3xl font-black">{reviews.length}</p>
+                </DashboardPanel>
+                <DashboardPanel>
+                  <p className="text-xs font-black uppercase text-slate-500">Pending</p>
+                  <p className="mt-2 text-3xl font-black">
+                    {reviews.filter((review) => review.status === 'pending').length}
+                  </p>
+                </DashboardPanel>
+                <DashboardPanel>
+                  <p className="text-xs font-black uppercase text-slate-500">Approved</p>
+                  <p className="mt-2 text-3xl font-black">
+                    {reviews.filter((review) => review.status === 'approved').length}
+                  </p>
+                </DashboardPanel>
+              </section>
+
+              <DashboardPanel eyebrow="Reviews" title="Your destination reviews">
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm leading-relaxed text-slate-600">
+                    Share recent travel notes. Reviews stay pending until an admin approves them.
+                  </p>
+                  <button
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-sea px-4 text-sm font-extrabold text-white"
+                    onClick={() => openReviewForm()}
+                    type="button"
+                  >
+                    <FaPlus aria-hidden="true" />
+                    Write review
+                  </button>
+                </div>
+
+                <div className="grid gap-3">
                 {isLoading ? (
                   <EmptyState text="Loading reviews..." />
                 ) : reviews.length ? (
@@ -218,27 +485,66 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                       key={`${review.destination_slug}-${review.created_at}`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="font-black">{review.title}</h3>
-                        <span className="rounded-lg bg-white px-3 py-1 text-sm font-black text-coral">
-                          {review.rating}/5
-                        </span>
+                        <div>
+                          <h3 className="font-black">{review.title}</h3>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">
+                            {destinationBySlug[review.destination_slug]?.name || review.destination_slug}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-2 text-sm font-black text-coral">
+                            <FaStar aria-hidden="true" />
+                            {review.rating}/5
+                          </span>
+                          <StatusBadge status={review.status} />
+                        </div>
                       </div>
                       <p className="mt-2 text-sm text-slate-600">{review.body}</p>
-                      <p className="mt-3 text-xs font-black uppercase text-slate-500">
-                        {review.destination_slug} - {review.status}
-                      </p>
                     </article>
                   ))
                 ) : (
                   <EmptyState text="No reviews yet. Your destination reviews will appear here." />
                 )}
-              </div>
-            </DashboardPanel>
+                </div>
+              </DashboardPanel>
+            </div>
           )}
 
           {activeTab === 'submissions' && (
-            <DashboardPanel>
-              <div className="grid gap-3">
+            <div className="grid gap-6">
+              <section className="grid gap-4 md:grid-cols-4">
+                {[
+                  ['Total', submissions.length],
+                  ['Pending', submissions.filter((submission) => submission.status === 'pending').length],
+                  ['Approved', submissions.filter((submission) => submission.status === 'approved').length],
+                  ['Rejected', submissions.filter((submission) => submission.status === 'rejected').length],
+                ].map(([label, value]) => (
+                  <DashboardPanel key={label}>
+                    <p className="text-xs font-black uppercase text-slate-500">{label}</p>
+                    <p className="mt-2 text-3xl font-black">{value}</p>
+                  </DashboardPanel>
+                ))}
+              </section>
+
+              <DashboardPanel eyebrow="Submissions" title="Suggest a place">
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm leading-relaxed text-slate-600">
+                    Send places, stays, routes, or sports activity suggestions for admin review.
+                  </p>
+                  <button
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-sea px-4 text-sm font-extrabold text-white"
+                    onClick={() => {
+                      setSubmissionForm(emptySubmissionForm);
+                      setIsSubmissionFormOpen(true);
+                    }}
+                    type="button"
+                  >
+                    <FaPlus aria-hidden="true" />
+                    Submit
+                  </button>
+                </div>
+
+                <div className="grid gap-3">
                 {isLoading ? (
                   <EmptyState text="Loading submissions..." />
                 ) : submissions.length ? (
@@ -253,27 +559,87 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                           {submission.submission_type} - {submission.municipality}
                         </p>
                       </div>
-                      <span className="rounded-lg bg-white px-3 py-2 text-sm font-black text-forest">
-                        {submission.status}
-                      </span>
+                      <StatusBadge status={submission.status} />
                     </article>
                   ))
                 ) : (
                   <EmptyState text="No submissions yet. Attraction and accommodation submissions will appear here." />
                 )}
-              </div>
-            </DashboardPanel>
+                </div>
+              </DashboardPanel>
+            </div>
           )}
 
           {activeTab === 'travel' && (
-            <DashboardPanel>
-              <div className="grid gap-3">
-                {tripPlan.map(([label, text]) => (
-                  <article className="rounded-lg border border-slate-200 bg-white p-4" key={label}>
-                    <p className="font-black text-sea">{label}</p>
-                    <p className="mt-1 text-sm text-slate-600">{text}</p>
-                  </article>
-                ))}
+            <DashboardPanel eyebrow="Travel plans" title="Build an itinerary">
+              <form className="grid gap-4 rounded-lg bg-mist p-4 lg:grid-cols-[150px_1fr_1fr_auto] lg:items-end" onSubmit={addTravelPlan}>
+                <Field
+                  label="Day"
+                  name="day"
+                  onChange={(event) => setTravelForm((current) => ({ ...current, day: event.target.value }))}
+                  placeholder="Day 1"
+                  value={travelForm.day}
+                />
+                <label className="grid gap-1">
+                  <span className="text-sm font-extrabold text-slate-500">Destination</span>
+                  <select
+                    className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+                    onChange={(event) => setTravelForm((current) => ({ ...current, destination_slug: event.target.value }))}
+                    value={travelForm.destination_slug}
+                  >
+                    {destinationOptions.map((destination) => (
+                      <option key={destination.slug} value={destination.slug}>
+                        {destination.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Field
+                  label="Notes"
+                  name="notes"
+                  onChange={(event) => setTravelForm((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Morning visit, bring cash"
+                  value={travelForm.notes}
+                />
+                <button
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-sea px-4 text-sm font-extrabold text-white"
+                  type="submit"
+                >
+                  <FaPlus aria-hidden="true" />
+                  Add
+                </button>
+              </form>
+
+              <div className="mt-5 grid gap-3">
+                {travelPlans.length ? (
+                  travelPlans.map((plan) => {
+                    const destination = destinationBySlug[plan.destination_slug];
+                    return (
+                      <article
+                        className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[1fr_auto] md:items-center"
+                        key={plan.id}
+                      >
+                        <div>
+                          <p className="text-sm font-black uppercase text-sea">{plan.day}</p>
+                          <h3 className="mt-1 font-black">{destination?.name || plan.destination_slug}</h3>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {destination?.municipality || 'Sorsogon'} - {plan.notes || destination?.best_time || 'No notes yet'}
+                          </p>
+                        </div>
+                        <button
+                          aria-label="Remove travel plan item"
+                          className="grid min-h-10 min-w-10 place-items-center rounded-lg bg-rose-50 text-rose-700"
+                          onClick={() => removeTravelPlan(plan.id)}
+                          type="button"
+                        >
+                          <FaTrash aria-hidden="true" />
+                        </button>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <EmptyState text="No travel plan items yet. Add saved or explored destinations to start building an itinerary." />
+                )}
               </div>
             </DashboardPanel>
           )}
@@ -308,6 +674,153 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
           {activeTab === 'saved' && renderSavedPlaces()}
         </main>
       </div>
+
+      {isReviewFormOpen && (
+        <div
+          className="fixed inset-0 z-[2000] grid place-items-center bg-ink/60 px-4 py-6 backdrop-blur-sm"
+          onClick={() => setIsReviewFormOpen(false)}
+          role="presentation"
+        >
+          <section
+            className="w-full max-w-xl rounded-lg bg-white p-5 shadow-travel sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase text-sea">Review</p>
+                <h2 className="mt-1 text-2xl font-black">Write destination review</h2>
+              </div>
+              <button
+                aria-label="Close review form"
+                className="grid size-10 shrink-0 place-items-center rounded-full bg-mist text-ink transition hover:bg-slate-200"
+                onClick={() => setIsReviewFormOpen(false)}
+                type="button"
+              >
+                <FaTimes aria-hidden="true" />
+              </button>
+            </div>
+
+            <form className="mt-5 grid gap-4" onSubmit={submitReview}>
+              <label className="grid gap-1">
+                <span className="text-sm font-extrabold text-slate-500">Destination</span>
+                <select
+                  className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+                  onChange={(event) => setReviewForm((current) => ({ ...current, destination_slug: event.target.value }))}
+                  value={reviewForm.destination_slug}
+                >
+                  {destinationOptions.map((destination) => (
+                    <option key={destination.slug} value={destination.slug}>
+                      {destination.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm font-extrabold text-slate-500">Rating</span>
+                <select
+                  className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+                  onChange={(event) => setReviewForm((current) => ({ ...current, rating: event.target.value }))}
+                  value={reviewForm.rating}
+                >
+                  {[5, 4, 3, 2, 1].map((rating) => (
+                    <option key={rating} value={rating}>
+                      {rating} star{rating > 1 ? 's' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Field
+                label="Title"
+                name="title"
+                onChange={(event) => setReviewForm((current) => ({ ...current, title: event.target.value }))}
+                placeholder="Great sunrise stop"
+                value={reviewForm.title}
+              />
+              <label className="grid gap-1">
+                <span className="text-sm font-extrabold text-slate-500">Review</span>
+                <textarea
+                  className="min-h-28 rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+                  onChange={(event) => setReviewForm((current) => ({ ...current, body: event.target.value }))}
+                  placeholder="Share tips, timing, fees, crowd level, or what made the visit worth it."
+                  value={reviewForm.body}
+                />
+              </label>
+              <button
+                className="min-h-11 rounded-lg bg-sea px-4 font-extrabold text-white disabled:opacity-60"
+                disabled={isSavingReview}
+                type="submit"
+              >
+                {isSavingReview ? 'Submitting...' : 'Submit review'}
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {isSubmissionFormOpen && (
+        <div
+          className="fixed inset-0 z-[2000] grid place-items-center bg-ink/60 px-4 py-6 backdrop-blur-sm"
+          onClick={() => setIsSubmissionFormOpen(false)}
+          role="presentation"
+        >
+          <section
+            className="w-full max-w-xl rounded-lg bg-white p-5 shadow-travel sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase text-sea">Submission</p>
+                <h2 className="mt-1 text-2xl font-black">Suggest new content</h2>
+              </div>
+              <button
+                aria-label="Close submission form"
+                className="grid size-10 shrink-0 place-items-center rounded-full bg-mist text-ink transition hover:bg-slate-200"
+                onClick={() => setIsSubmissionFormOpen(false)}
+                type="button"
+              >
+                <FaTimes aria-hidden="true" />
+              </button>
+            </div>
+
+            <form className="mt-5 grid gap-4" onSubmit={submitPlace}>
+              <label className="grid gap-1">
+                <span className="text-sm font-extrabold text-slate-500">Type</span>
+                <select
+                  className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+                  onChange={(event) => setSubmissionForm((current) => ({ ...current, submission_type: event.target.value }))}
+                  value={submissionForm.submission_type}
+                >
+                  <option value="destination">Destination</option>
+                  <option value="accommodation">Accommodation</option>
+                  <option value="transport">Transport</option>
+                  <option value="sports">Sports activity</option>
+                </select>
+              </label>
+              <Field
+                label="Name"
+                name="name"
+                onChange={(event) => setSubmissionForm((current) => ({ ...current, name: event.target.value }))}
+                placeholder="Place or activity name"
+                value={submissionForm.name}
+              />
+              <Field
+                label="Municipality"
+                name="municipality"
+                onChange={(event) => setSubmissionForm((current) => ({ ...current, municipality: event.target.value }))}
+                placeholder="Bulusan"
+                value={submissionForm.municipality}
+              />
+              <button
+                className="min-h-11 rounded-lg bg-sea px-4 font-extrabold text-white disabled:opacity-60"
+                disabled={isSavingSubmission}
+                type="submit"
+              >
+                {isSavingSubmission ? 'Submitting...' : 'Send submission'}
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
 
       {showWelcome && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-ink/60 px-4 backdrop-blur-sm">
