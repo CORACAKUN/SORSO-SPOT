@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FaClock,
   FaCoins,
@@ -17,6 +17,7 @@ const sorsogonOverviewZoom = 10;
 const destinationZoom = 14;
 const zoomOutAnimationDuration = 1.3;
 const zoomInAnimationDuration = 2.05;
+const minimumMapLoadingDuration = 450;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const fallbackImage =
   'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=900&q=80';
@@ -66,15 +67,21 @@ export default function GoogleMapDemo({
   const markerRefs = useRef({});
   const leafletMapRef = useRef(null);
   const leafletMarkerRefs = useRef({});
+  const loadingTimeoutRef = useRef(null);
   const [provider, setProvider] = useState('leaflet');
   const [leafletStyle, setLeafletStyle] = useState('satellite');
   const [isGoogleEnabled, setIsGoogleEnabled] = useState(false);
+  const [isMapLoading, setIsMapLoading] = useState(true);
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [error, setError] = useState('');
   const [favoriteActionKey, setFavoriteActionKey] = useState('');
-  const validDestinations = destinations.filter((destination) => {
+  const [placeTypeFilter, setPlaceTypeFilter] = useState('all');
+  const [municipalityFilter, setMunicipalityFilter] = useState('all');
+  const [savedFilter, setSavedFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const coordinateDestinations = useMemo(() => destinations.filter((destination) => {
     return Number.isFinite(Number(destination.latitude)) && Number.isFinite(Number(destination.longitude));
-  });
+  }), [destinations]);
 
   function getPlaceKey(destination) {
     return destination.map_key || destination.slug;
@@ -100,6 +107,48 @@ export default function GoogleMapDemo({
       ? savedAccommodationIds.has(getAccommodationId(destination))
       : savedDestinationSlugs.has(destination.slug);
   }
+
+  const municipalityOptions = useMemo(() => {
+    return [
+      'all',
+      ...new Set(
+        coordinateDestinations
+          .map((destination) => destination.municipality)
+          .filter(Boolean)
+          .sort((first, second) => first.localeCompare(second)),
+      ),
+    ];
+  }, [coordinateDestinations]);
+
+  const validDestinations = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return coordinateDestinations.filter((destination) => {
+      const matchesType =
+        placeTypeFilter === 'all' ||
+        (placeTypeFilter === 'accommodation'
+          ? destination.map_type === 'accommodation'
+          : destination.map_type !== 'accommodation');
+      const matchesMunicipality =
+        municipalityFilter === 'all' || destination.municipality === municipalityFilter;
+      const matchesSaved = savedFilter === 'all' || isPlaceSaved(destination);
+      const matchesSearch =
+        !query ||
+        [destination.name, destination.municipality, destination.category, destination.description]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(query));
+
+      return matchesType && matchesMunicipality && matchesSaved && matchesSearch;
+    });
+  }, [
+    coordinateDestinations,
+    municipalityFilter,
+    placeTypeFilter,
+    savedFilter,
+    savedAccommodationIds,
+    savedDestinationSlugs,
+    searchQuery,
+  ]);
 
   function getPopupMeta(destination) {
     return destination.map_type === 'accommodation'
@@ -227,8 +276,21 @@ export default function GoogleMapDemo({
     setFavoriteActionKey('');
   }
 
+  function finishMapLoading(startedAt) {
+    const elapsed = Date.now() - startedAt;
+    const delay = Math.max(0, minimumMapLoadingDuration - elapsed);
+
+    window.clearTimeout(loadingTimeoutRef.current);
+    loadingTimeoutRef.current = window.setTimeout(() => {
+      setIsMapLoading(false);
+    }, delay);
+  }
+
   useEffect(() => {
     let isMounted = true;
+    const loadingStartedAt = Date.now();
+    window.clearTimeout(loadingTimeoutRef.current);
+    setIsMapLoading(true);
 
     async function initializeLeafletMap() {
       if (provider !== 'leaflet' || !mapRef.current) return;
@@ -304,29 +366,102 @@ export default function GoogleMapDemo({
         leafletMarkerRefs.current[getPlaceKey(destination)] = marker;
       });
 
-      window.setTimeout(() => map.invalidateSize(), 0);
+      window.setTimeout(() => {
+        map.invalidateSize();
+        if (isMounted) finishMapLoading(loadingStartedAt);
+      }, 80);
     }
 
     initializeLeafletMap();
 
     return () => {
       isMounted = false;
+      window.clearTimeout(loadingTimeoutRef.current);
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
         leafletMarkerRefs.current = {};
       }
     };
-  }, [destinations, leafletStyle, provider]);
+  }, [leafletStyle, provider]);
 
   useEffect(() => {
     let isMounted = true;
 
+    async function updateLeafletMarkers() {
+      const map = leafletMapRef.current;
+      if (provider !== 'leaflet' || !map) return;
+
+      const loadingStartedAt = Date.now();
+      window.clearTimeout(loadingTimeoutRef.current);
+      setIsMapLoading(true);
+
+      const leaflet = await loadLeaflet();
+      if (!isMounted || !leafletMapRef.current) return;
+
+      Object.values(leafletMarkerRefs.current).forEach((marker) => marker.remove());
+      leafletMarkerRefs.current = {};
+
+      const markerIcon = leaflet.divIcon({
+        className: '',
+        html:
+          '<span style="display:block;width:18px;height:18px;border-radius:999px;background:#d96945;border:3px solid #fff;box-shadow:0 6px 16px rgba(19,32,31,.28);"></span>',
+        iconAnchor: [9, 9],
+        iconSize: [18, 18],
+        popupAnchor: [0, -8],
+      });
+      const accommodationIcon = leaflet.divIcon({
+        className: '',
+        html:
+          '<span style="display:grid;width:24px;height:24px;place-items:center;border-radius:8px;background:#116d75;border:3px solid #fff;box-shadow:0 6px 16px rgba(19,32,31,.28);color:#fff;font-size:11px;font-weight:900;">A</span>',
+        iconAnchor: [12, 12],
+        iconSize: [24, 24],
+        popupAnchor: [0, -10],
+      });
+
+      validDestinations.forEach((destination) => {
+        const marker = leaflet
+          .marker([Number(destination.latitude), Number(destination.longitude)], {
+            icon: destination.map_type === 'accommodation' ? accommodationIcon : markerIcon,
+            title: destination.name,
+          })
+          .addTo(map);
+
+        marker.bindPopup(createPopupContent(destination), {
+          closeButton: true,
+          maxWidth: 280,
+          minWidth: 260,
+        });
+        leafletMarkerRefs.current[getPlaceKey(destination)] = marker;
+      });
+
+      finishMapLoading(loadingStartedAt);
+    }
+
+    updateLeafletMarkers();
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(loadingTimeoutRef.current);
+    };
+  }, [provider, validDestinations]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadingStartedAt = Date.now();
+
     async function initializeMap() {
-      if (provider !== 'google' || !isGoogleEnabled) return;
+      if (provider !== 'google' || !isGoogleEnabled) {
+        if (provider === 'google') setIsMapLoading(false);
+        return;
+      }
+
+      window.clearTimeout(loadingTimeoutRef.current);
+      setIsMapLoading(true);
 
       if (!googleMapsApiKey) {
         setError('Add VITE_GOOGLE_MAPS_API_KEY to .env to enable the Google Maps demo.');
+        setIsMapLoading(false);
         return;
       }
 
@@ -395,8 +530,12 @@ export default function GoogleMapDemo({
           });
           map.fitBounds(bounds, 64);
         }
+        finishMapLoading(loadingStartedAt);
       } catch (mapError) {
-        if (isMounted) setError(mapError.message);
+        if (isMounted) {
+          setError(mapError.message);
+          setIsMapLoading(false);
+        }
       }
     }
 
@@ -404,14 +543,56 @@ export default function GoogleMapDemo({
 
     return () => {
       isMounted = false;
+      window.clearTimeout(loadingTimeoutRef.current);
     };
-  }, [destinations, isGoogleEnabled, provider]);
+  }, [isGoogleEnabled, provider, validDestinations]);
 
   function renderDestinationList() {
     return (
       <aside className="absolute inset-x-3 bottom-3 z-[1000] max-h-[240px] overflow-y-auto rounded-lg bg-white/95 p-3 shadow-travel backdrop-blur md:inset-x-auto md:bottom-auto md:right-4 md:top-4 md:max-h-[calc(100%-32px)] md:w-80">
         <div className="mb-3">
           <h3 className="text-xl font-black">Sorsogon map</h3>
+        </div>
+
+        <div className="mb-3 grid gap-2">
+          <input
+            className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-ink outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search map"
+            type="search"
+            value={searchQuery}
+          />
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
+            <select
+              className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-ink outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+              onChange={(event) => setPlaceTypeFilter(event.target.value)}
+              value={placeTypeFilter}
+            >
+              <option value="all">All places</option>
+              <option value="destination">Tourist spots</option>
+              <option value="accommodation">Accommodations</option>
+            </select>
+            <select
+              className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-ink outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+              onChange={(event) => setMunicipalityFilter(event.target.value)}
+              value={municipalityFilter}
+            >
+              {municipalityOptions.map((municipality) => (
+                <option key={municipality} value={municipality}>
+                  {municipality === 'all' ? 'All municipalities' : municipality}
+                </option>
+              ))}
+            </select>
+          </div>
+          <label className="flex min-h-10 items-center gap-2 rounded-lg bg-mist px-3 text-sm font-extrabold text-ink">
+            <input
+              checked={savedFilter === 'saved'}
+              className="size-4 accent-teal-700"
+              onChange={(event) => setSavedFilter(event.target.checked ? 'saved' : 'all')}
+              type="checkbox"
+            />
+            Saved only
+          </label>
         </div>
 
         <div className="grid gap-2">
@@ -567,6 +748,15 @@ export default function GoogleMapDemo({
         className={`absolute inset-0 ${provider === 'google' ? 'sorso-google-map' : 'sorso-leaflet-map'}`}
         ref={mapRef}
       />
+
+      {isMapLoading && !isGooglePaused && (
+        <div className="absolute inset-0 z-[1500] grid place-items-center bg-transparent backdrop-blur-sm">
+          <div className="grid min-w-40 place-items-center gap-3 rounded-lg bg-white px-5 py-4 text-center shadow-travel">
+            <span className="size-8 animate-spin rounded-full border-4 border-slate-200 border-t-sea" />
+            <p className="text-sm font-black text-ink">Loading map...</p>
+          </div>
+        </div>
+      )}
 
       {isGooglePaused && (
         <div className="absolute inset-0 z-[5] bg-[linear-gradient(135deg,#e8f2ec,#f9fbf6_45%,#d7e6ef)]">
