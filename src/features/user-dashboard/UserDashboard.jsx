@@ -91,6 +91,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
     accommodations,
     addReview,
     addSubmission,
+    approvedReviews,
     destinations,
     isLoading,
     message,
@@ -434,6 +435,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
           {activeTab === 'explore' && (
             <DashboardPanel>
               <GoogleMapDemo
+                approvedReviews={approvedReviews}
                 destinations={mapPlaces}
                 onToggleFavorite={toggleFavorite}
                 savedDestinationSlugs={savedDestinationSlugs}

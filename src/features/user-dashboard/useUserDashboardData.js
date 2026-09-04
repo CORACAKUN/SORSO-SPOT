@@ -128,6 +128,7 @@ export function useUserDashboardData(user) {
   const [accommodations, setAccommodations] = useState(fallbackAccommodations);
   const [favorites, setFavorites] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [approvedReviews, setApprovedReviews] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -163,7 +164,14 @@ export function useUserDashboardData(user) {
     if (!silent) setIsLoading(true);
     setMessage('');
 
-    const [destinationsResult, accommodationsResult, favoritesResult, reviewsResult, submissionsResult] =
+    const [
+      destinationsResult,
+      accommodationsResult,
+      favoritesResult,
+      reviewsResult,
+      approvedReviewsResult,
+      submissionsResult,
+    ] =
       await Promise.all([
         supabase
           .from('destinations')
@@ -190,6 +198,11 @@ export function useUserDashboardData(user) {
           .eq('user_email', user.email)
           .order('created_at', { ascending: false }),
         supabase
+          .from('reviews')
+          .select('destination_slug, rating, title, body, user_email, created_at')
+          .eq('status', 'approved')
+          .order('created_at', { ascending: false }),
+        supabase
           .from('submissions')
           .select('submission_type, name, municipality, description, contact_info, status, submitted_at')
           .eq('submitter_email', user.email)
@@ -202,6 +215,7 @@ export function useUserDashboardData(user) {
     if (accommodationsResult.data?.length) setAccommodations(accommodationsResult.data);
     setFavorites(favoritesResult.data || []);
     setReviews(reviewsResult.data || []);
+    setApprovedReviews(approvedReviewsResult.data || []);
     setSubmissions(submissionsResult.data || []);
 
     const firstError =
@@ -209,6 +223,7 @@ export function useUserDashboardData(user) {
       accommodationsResult.error ||
       favoritesResult.error ||
       reviewsResult.error ||
+      approvedReviewsResult.error ||
       submissionsResult.error;
 
     if (firstError) {
@@ -320,6 +335,7 @@ export function useUserDashboardData(user) {
     addReview,
     addSubmission,
     accommodations,
+    approvedReviews,
     destinations,
     isLoading,
     loadDashboard,

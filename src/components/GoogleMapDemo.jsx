@@ -8,6 +8,7 @@ import {
   FaPhoneAlt,
   FaBookmark,
   FaRegCalendarAlt,
+  FaStar,
   FaTimes,
 } from 'react-icons/fa';
 
@@ -52,6 +53,7 @@ function loadLeaflet() {
 }
 
 export default function GoogleMapDemo({
+  approvedReviews = [],
   destinations,
   onToggleFavorite,
   savedDestinationSlugs = new Set(),
@@ -523,6 +525,18 @@ export default function GoogleMapDemo({
   const isSelectedDestinationSaved = selectedDestination
     ? savedDestinationSlugs.has(selectedDestination.slug)
     : false;
+  const selectedDestinationReviews =
+    selectedDestination?.is_saveable !== false
+      ? approvedReviews.filter(
+          (review) => review.destination_slug === selectedDestination?.slug,
+        )
+      : [];
+  const selectedDestinationAverageRating = selectedDestinationReviews.length
+    ? (
+        selectedDestinationReviews.reduce((total, review) => total + Number(review.rating || 0), 0) /
+        selectedDestinationReviews.length
+      ).toFixed(1)
+    : null;
 
   return (
     <div className="relative z-0 h-[calc(100svh-170px)] min-h-[480px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
@@ -689,6 +703,60 @@ export default function GoogleMapDemo({
                   </div>
                 ))}
               </dl>
+
+              {selectedDestination?.is_saveable !== false && (
+                <section className="mt-6">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase text-sea">Traveler reviews</p>
+                      <h3 className="mt-1 text-xl font-black">
+                        {selectedDestinationReviews.length
+                          ? `${selectedDestinationReviews.length} approved review${
+                              selectedDestinationReviews.length > 1 ? 's' : ''
+                            }`
+                          : 'No approved reviews yet'}
+                      </h3>
+                    </div>
+                    {selectedDestinationAverageRating && (
+                      <span className="inline-flex items-center gap-2 rounded-lg bg-sun/25 px-3 py-2 text-sm font-black text-ink">
+                        <FaStar aria-hidden="true" />
+                        {selectedDestinationAverageRating}/5
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 grid gap-3">
+                    {selectedDestinationReviews.length ? (
+                      selectedDestinationReviews.slice(0, 3).map((review) => (
+                        <article
+                          className="rounded-lg bg-mist p-4"
+                          key={`${review.destination_slug}-${review.created_at}-${review.title}`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <h4 className="font-black">{review.title || 'Traveler review'}</h4>
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1 text-sm font-black text-coral">
+                              <FaStar aria-hidden="true" />
+                              {review.rating || 0}/5
+                            </span>
+                          </div>
+                          {review.body && (
+                            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                              {review.body}
+                            </p>
+                          )}
+                          <p className="mt-3 text-xs font-semibold text-slate-500">
+                            {review.user_email || 'Traveler'}
+                          </p>
+                        </article>
+                      ))
+                    ) : (
+                      <p className="rounded-lg bg-mist p-4 text-sm font-semibold text-slate-600">
+                        Approved traveler reviews will appear here after moderation.
+                      </p>
+                    )}
+                  </div>
+                </section>
+              )}
             </div>
           </section>
         </div>
