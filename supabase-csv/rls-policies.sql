@@ -29,11 +29,34 @@ create table if not exists public.favorites (
   unique (user_email, destination_slug)
 );
 
+create table if not exists public.transport_routes (
+  id uuid primary key default gen_random_uuid(),
+  origin text not null,
+  destination text not null,
+  transport_type text,
+  estimated_duration text,
+  estimated_cost text,
+  route_notes text,
+  is_published boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+alter table public.transport_routes
+add column if not exists id uuid default gen_random_uuid();
+
+alter table public.transport_routes
+add column if not exists estimated_duration text,
+add column if not exists estimated_cost text,
+add column if not exists route_notes text,
+add column if not exists is_published boolean default true,
+add column if not exists created_at timestamptz default now();
+
 alter table public.submissions enable row level security;
 alter table public.reviews enable row level security;
 alter table public.favorites enable row level security;
 alter table public.travel_plans enable row level security;
 alter table public.accommodation_favorites enable row level security;
+alter table public.transport_routes enable row level security;
 
 drop policy if exists "Travelers and admins can read submissions" on public.submissions;
 drop policy if exists "Travelers can create their own submissions" on public.submissions;
@@ -233,3 +256,75 @@ on public.accommodation_favorites
 for delete
 to authenticated
 using (user_email = (auth.jwt() ->> 'email'));
+
+drop policy if exists "Anyone can read published transport routes" on public.transport_routes;
+drop policy if exists "Admins can read transport routes" on public.transport_routes;
+drop policy if exists "Admins can create transport routes" on public.transport_routes;
+drop policy if exists "Admins can update transport routes" on public.transport_routes;
+drop policy if exists "Admins can delete transport routes" on public.transport_routes;
+
+create policy "Anyone can read published transport routes"
+on public.transport_routes
+for select
+to anon, authenticated
+using (is_published = true);
+
+create policy "Admins can read transport routes"
+on public.transport_routes
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.profiles
+    where profiles.id = auth.uid()
+      and profiles.role = 'admin'
+  )
+);
+
+create policy "Admins can create transport routes"
+on public.transport_routes
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.profiles
+    where profiles.id = auth.uid()
+      and profiles.role = 'admin'
+  )
+);
+
+create policy "Admins can update transport routes"
+on public.transport_routes
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.profiles
+    where profiles.id = auth.uid()
+      and profiles.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.profiles
+    where profiles.id = auth.uid()
+      and profiles.role = 'admin'
+  )
+);
+
+create policy "Admins can delete transport routes"
+on public.transport_routes
+for delete
+to authenticated
+using (
+  exists (
+    select 1
+    from public.profiles
+    where profiles.id = auth.uid()
+      and profiles.role = 'admin'
+  )
+);

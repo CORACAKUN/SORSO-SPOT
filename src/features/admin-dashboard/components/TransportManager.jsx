@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FaPlus, FaRedoAlt, FaTimes } from 'react-icons/fa';
+import { FaPlus, FaRedoAlt, FaTimes, FaTrash } from 'react-icons/fa';
 import ShellCard from '../../../components/shared/ShellCard.jsx';
 import { supabase } from '../../../lib/supabaseClient';
 
@@ -12,6 +12,8 @@ const emptyForm = {
   notes: '',
   is_published: true,
 };
+const routeSelectFields =
+  'id, origin, destination, transport_type, duration:estimated_duration, cost_range:estimated_cost, notes:route_notes, is_published, created_at';
 
 function TextField({ label, name, onChange, placeholder, value }) {
   return (
@@ -35,6 +37,7 @@ export default function TransportManager() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
 
@@ -42,7 +45,7 @@ export default function TransportManager() {
     const query = search.trim().toLowerCase();
     if (!query) return routes;
     return routes.filter((route) =>
-      [route.origin, route.destination, route.transport_type]
+      [route.origin, route.destination, route.transport_type, route.duration, route.cost_range, route.notes]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(query)),
     );
@@ -55,7 +58,7 @@ export default function TransportManager() {
 
     const { data, error } = await supabase
       .from('transport_routes')
-      .select('id, origin, destination, transport_type, duration, cost_range, notes, is_published, created_at')
+      .select(routeSelectFields)
       .order('origin', { ascending: true });
 
     if (error) {
@@ -118,15 +121,15 @@ export default function TransportManager() {
       origin: form.origin.trim(),
       destination: form.destination.trim(),
       transport_type: form.transport_type.trim() || null,
-      duration: form.duration.trim() || null,
-      cost_range: form.cost_range.trim() || null,
-      notes: form.notes.trim() || null,
+      estimated_duration: form.duration.trim() || null,
+      estimated_cost: form.cost_range.trim() || null,
+      route_notes: form.notes.trim() || null,
       is_published: Boolean(form.is_published),
     };
 
     const result = editingId
-      ? await supabase.from('transport_routes').update(payload).eq('id', editingId).select().single()
-      : await supabase.from('transport_routes').insert(payload).select().single();
+      ? await supabase.from('transport_routes').update(payload).eq('id', editingId).select(routeSelectFields).single()
+      : await supabase.from('transport_routes').insert(payload).select(routeSelectFields).single();
 
     setIsSaving(false);
     if (result.error) {
@@ -154,6 +157,24 @@ export default function TransportManager() {
         item.id === route.id ? { ...item, is_published: !item.is_published } : item,
       ),
     );
+  }
+
+  async function deleteRoute(route) {
+    const shouldDelete = window.confirm(`Delete ${route.origin} to ${route.destination} permanently?`);
+    if (!shouldDelete) return;
+
+    setDeletingId(route.id);
+    setMessage('');
+
+    const { error } = await supabase.from('transport_routes').delete().eq('id', route.id);
+
+    setDeletingId(null);
+    if (error) {
+      setMessage(`Unable to delete route: ${error.message}`);
+      return;
+    }
+
+    setRoutes((current) => current.filter((item) => item.id !== route.id));
   }
 
   return (
@@ -190,7 +211,7 @@ export default function TransportManager() {
             <input
               className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20 md:w-72"
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search routes"
+              placeholder="Search routes, notes, costs"
               type="search"
               value={search}
             />
@@ -235,9 +256,12 @@ export default function TransportManager() {
                     {route.is_published ? 'Published' : 'Draft'}
                   </span>
                   <div className="flex flex-wrap gap-2">
-                    <button className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm font-extrabold text-ink" onClick={() => openEditForm(route)} type="button">Edit</button>
-                    <button className="min-h-10 rounded-lg bg-sea px-3 text-sm font-extrabold text-white" onClick={() => togglePublished(route)} type="button">
+                    <button className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm font-extrabold text-ink disabled:opacity-60" disabled={deletingId === route.id} onClick={() => openEditForm(route)} type="button">Edit</button>
+                    <button className="min-h-10 rounded-lg bg-sea px-3 text-sm font-extrabold text-white disabled:opacity-60" disabled={deletingId === route.id} onClick={() => togglePublished(route)} type="button">
                       {route.is_published ? 'Unpublish' : 'Publish'}
+                    </button>
+                    <button className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-rose-200 bg-white px-3 text-sm font-extrabold text-rose-700 disabled:opacity-60" disabled={deletingId === route.id} onClick={() => deleteRoute(route)} title="Delete route" type="button">
+                      <FaTrash aria-hidden="true" />
                     </button>
                   </div>
                 </article>
