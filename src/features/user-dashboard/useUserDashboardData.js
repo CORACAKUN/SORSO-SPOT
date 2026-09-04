@@ -127,6 +127,7 @@ export function useUserDashboardData(user) {
   const [destinations, setDestinations] = useState(fallbackDestinations);
   const [accommodations, setAccommodations] = useState(fallbackAccommodations);
   const [favorites, setFavorites] = useState([]);
+  const [accommodationFavorites, setAccommodationFavorites] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [approvedReviews, setApprovedReviews] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -155,6 +156,28 @@ export function useUserDashboardData(user) {
     () => new Set(favorites.map((favorite) => favorite.destination_slug)),
     [favorites],
   );
+  const accommodationById = useMemo(() => {
+    return accommodations.reduce((map, accommodation) => {
+      map[String(accommodation.id)] = accommodation;
+      return map;
+    }, {});
+  }, [accommodations]);
+  const savedAccommodationIds = useMemo(
+    () => new Set(accommodationFavorites.map((favorite) => String(favorite.accommodation_id))),
+    [accommodationFavorites],
+  );
+  const savedAccommodations = accommodationFavorites.map((favorite) => {
+    const accommodation = accommodationById[String(favorite.accommodation_id)];
+    return {
+      ...favorite,
+      title: accommodation?.name || 'Saved accommodation',
+      location: accommodation?.municipality || 'Sorsogon',
+      category: accommodation?.accommodation_type || 'Accommodation',
+      bestTime: accommodation?.price_range || 'Contact listing',
+      image_url: accommodation?.image_url,
+      placeType: 'Accommodation',
+    };
+  });
 
   async function loadDashboard({ silent = false, shouldApply = () => true } = {}) {
     if (!supabase) {
@@ -169,6 +192,7 @@ export function useUserDashboardData(user) {
       destinationsResult,
       accommodationsResult,
       favoritesResult,
+      accommodationFavoritesResult,
       reviewsResult,
       approvedReviewsResult,
       submissionsResult,
@@ -192,6 +216,11 @@ export function useUserDashboardData(user) {
         supabase
           .from('favorites')
           .select('destination_slug, created_at')
+          .eq('user_email', user.email)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('accommodation_favorites')
+          .select('accommodation_id, created_at')
           .eq('user_email', user.email)
           .order('created_at', { ascending: false }),
         supabase
@@ -222,6 +251,7 @@ export function useUserDashboardData(user) {
     if (destinationsResult.data?.length) setDestinations(destinationsResult.data);
     if (accommodationsResult.data?.length) setAccommodations(accommodationsResult.data);
     setFavorites(favoritesResult.data || []);
+    setAccommodationFavorites(accommodationFavoritesResult.data || []);
     setReviews(reviewsResult.data || []);
     setApprovedReviews(approvedReviewsResult.data || []);
     setSubmissions(submissionsResult.data || []);
@@ -231,6 +261,7 @@ export function useUserDashboardData(user) {
       destinationsResult.error ||
       accommodationsResult.error ||
       favoritesResult.error ||
+      accommodationFavoritesResult.error ||
       reviewsResult.error ||
       approvedReviewsResult.error ||
       submissionsResult.error ||
@@ -379,6 +410,48 @@ export function useUserDashboardData(user) {
     setFavorites((current) => [data, ...current]);
   }
 
+  async function toggleAccommodationFavorite(accommodationId) {
+    if (!supabase || !accommodationId) return;
+
+    const normalizedId = String(accommodationId);
+    setMessage('');
+    const isSaved = savedAccommodationIds.has(normalizedId);
+
+    if (isSaved) {
+      const { error } = await supabase
+        .from('accommodation_favorites')
+        .delete()
+        .eq('user_email', user.email)
+        .eq('accommodation_id', normalizedId);
+
+      if (error) {
+        setMessage(`Unable to remove saved accommodation: ${error.message}`);
+        return;
+      }
+
+      setAccommodationFavorites((current) =>
+        current.filter((favorite) => String(favorite.accommodation_id) !== normalizedId),
+      );
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('accommodation_favorites')
+      .insert({
+        user_email: user.email,
+        accommodation_id: normalizedId,
+      })
+      .select('accommodation_id, created_at')
+      .single();
+
+    if (error) {
+      setMessage(`Unable to save accommodation: ${error.message}`);
+      return;
+    }
+
+    setAccommodationFavorites((current) => [data, ...current]);
+  }
+
   return {
     addReview,
     addSubmission,
@@ -390,10 +463,13 @@ export function useUserDashboardData(user) {
     loadDashboard,
     message,
     reviews,
+    savedAccommodationIds,
+    savedAccommodations,
     savedDestinationSlugs,
     savedDestinations,
     setMessage,
     submissions,
+    toggleAccommodationFavorite,
     toggleFavorite,
     travelPlans,
     removeTravelPlan,

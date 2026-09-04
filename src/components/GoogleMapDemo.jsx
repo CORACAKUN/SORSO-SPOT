@@ -55,7 +55,9 @@ function loadLeaflet() {
 export default function GoogleMapDemo({
   approvedReviews = [],
   destinations,
+  onToggleAccommodationFavorite,
   onToggleFavorite,
+  savedAccommodationIds = new Set(),
   savedDestinationSlugs = new Set(),
 }) {
   const mapRef = useRef(null);
@@ -69,8 +71,7 @@ export default function GoogleMapDemo({
   const [isGoogleEnabled, setIsGoogleEnabled] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [error, setError] = useState('');
-  const [favoriteActionSlug, setFavoriteActionSlug] = useState('');
-  const canSaveDestinations = Boolean(onToggleFavorite);
+  const [favoriteActionKey, setFavoriteActionKey] = useState('');
   const validDestinations = destinations.filter((destination) => {
     return Number.isFinite(Number(destination.latitude)) && Number.isFinite(Number(destination.longitude));
   });
@@ -81,6 +82,23 @@ export default function GoogleMapDemo({
 
   function getPlaceTypeLabel(destination) {
     return destination.map_type === 'accommodation' ? 'Accommodation' : 'Tourist spot';
+  }
+
+  function getAccommodationId(destination) {
+    return String(destination.id || '');
+  }
+
+  function canSavePlace(destination) {
+    if (destination.is_saveable === false) return false;
+    return destination.map_type === 'accommodation'
+      ? Boolean(onToggleAccommodationFavorite && getAccommodationId(destination))
+      : Boolean(onToggleFavorite);
+  }
+
+  function isPlaceSaved(destination) {
+    return destination.map_type === 'accommodation'
+      ? savedAccommodationIds.has(getAccommodationId(destination))
+      : savedDestinationSlugs.has(destination.slug);
   }
 
   function getPopupMeta(destination) {
@@ -196,12 +214,17 @@ export default function GoogleMapDemo({
     infoWindow.open(map, marker);
   }
 
-  async function handleToggleFavorite(destinationSlug) {
-    if (!onToggleFavorite || favoriteActionSlug) return;
+  async function handleToggleFavorite(destination) {
+    if (!canSavePlace(destination) || favoriteActionKey) return;
 
-    setFavoriteActionSlug(destinationSlug);
-    await onToggleFavorite(destinationSlug);
-    setFavoriteActionSlug('');
+    const placeKey = getPlaceKey(destination);
+    setFavoriteActionKey(placeKey);
+    if (destination.map_type === 'accommodation') {
+      await onToggleAccommodationFavorite(getAccommodationId(destination));
+    } else {
+      await onToggleFavorite(destination.slug);
+    }
+    setFavoriteActionKey('');
   }
 
   useEffect(() => {
@@ -394,13 +417,13 @@ export default function GoogleMapDemo({
         <div className="grid gap-2">
           {validDestinations.length ? (
             validDestinations.map((destination) => {
-              const isSaveable = destination.is_saveable !== false;
-              const isSaved = isSaveable && savedDestinationSlugs.has(destination.slug);
+              const isSaveable = canSavePlace(destination);
+              const isSaved = isSaveable && isPlaceSaved(destination);
 
               return (
                 <button
                   className={`grid gap-3 rounded-lg p-2 text-left hover:bg-mist ${
-                    canSaveDestinations && isSaveable ? 'grid-cols-[64px_1fr_28px]' : 'grid-cols-[64px_1fr]'
+                    isSaveable ? 'grid-cols-[64px_1fr_28px]' : 'grid-cols-[64px_1fr]'
                   }`}
                   key={getPlaceKey(destination)}
                   onClick={() => openDestination(destination)}
@@ -429,7 +452,7 @@ export default function GoogleMapDemo({
                       View details
                     </span>
                   </span>
-                  {canSaveDestinations && isSaveable && (
+                  {isSaveable && (
                     <span
                       className={`grid size-8 place-items-center rounded-lg ${
                         isSaved ? 'bg-sun/25 text-ink' : 'bg-mist text-slate-500'
@@ -523,10 +546,10 @@ export default function GoogleMapDemo({
       ).filter((item) => item.value)
     : [];
   const isSelectedDestinationSaved = selectedDestination
-    ? savedDestinationSlugs.has(selectedDestination.slug)
+    ? isPlaceSaved(selectedDestination)
     : false;
   const selectedDestinationReviews =
-    selectedDestination?.is_saveable !== false
+    selectedDestination?.map_type !== 'accommodation'
       ? approvedReviews.filter(
           (review) => review.destination_slug === selectedDestination?.slug,
         )
@@ -665,15 +688,15 @@ export default function GoogleMapDemo({
                 </p>
               )}
 
-              {onToggleFavorite && selectedDestination.is_saveable !== false && (
+              {selectedDestination && canSavePlace(selectedDestination) && (
                 <button
                   className={`mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-sm font-extrabold ${
                     isSelectedDestinationSaved
                       ? 'bg-sun/25 text-ink'
                       : 'bg-sea text-white'
                   } disabled:opacity-60`}
-                  disabled={favoriteActionSlug === selectedDestination.slug}
-                  onClick={() => handleToggleFavorite(selectedDestination.slug)}
+                  disabled={favoriteActionKey === getPlaceKey(selectedDestination)}
+                  onClick={() => handleToggleFavorite(selectedDestination)}
                   type="button"
                 >
                   {isSelectedDestinationSaved ? (
@@ -681,7 +704,7 @@ export default function GoogleMapDemo({
                   ) : (
                     <FaRegBookmark aria-hidden="true" />
                   )}
-                  {favoriteActionSlug === selectedDestination.slug
+                  {favoriteActionKey === getPlaceKey(selectedDestination)
                     ? 'Saving...'
                     : isSelectedDestinationSaved
                       ? 'Saved place'
@@ -704,7 +727,7 @@ export default function GoogleMapDemo({
                 ))}
               </dl>
 
-              {selectedDestination?.is_saveable !== false && (
+              {selectedDestination?.map_type !== 'accommodation' && (
                 <section className="mt-6">
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>

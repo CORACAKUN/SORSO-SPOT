@@ -97,10 +97,13 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
     isLoading,
     message,
     reviews,
+    savedAccommodationIds,
+    savedAccommodations,
     savedDestinationSlugs,
     savedDestinations,
     setMessage,
     submissions,
+    toggleAccommodationFavorite,
     toggleFavorite,
     travelPlans,
     removeTravelPlan,
@@ -143,7 +146,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
         accommodation.amenities || accommodation.price_range
           ? [accommodation.price_range, accommodation.amenities].filter(Boolean).join(' - ')
           : 'Published accommodation listing.',
-      is_saveable: false,
+      is_saveable: Boolean(accommodation.id),
     }));
 
     return [...destinationPlaces, ...accommodationPlaces];
@@ -253,52 +256,76 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
   }
 
   function renderSavedPlaces() {
+    const savedPlaces = [
+      ...savedDestinations.map((favorite) => ({
+        ...favorite,
+        image_url:
+          destinationBySlug[favorite.destination_slug]?.image_url ||
+          'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+        placeType: 'Destination',
+        remove: () => toggleFavorite(favorite.destination_slug),
+        review: () => openReviewForm(favorite.destination_slug),
+        plan: () => {
+          setTravelForm((current) => ({ ...current, destination_slug: favorite.destination_slug }));
+          setActiveTab('travel');
+        },
+      })),
+      ...savedAccommodations.map((favorite) => ({
+        ...favorite,
+        image_url:
+          favorite.image_url ||
+          'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80',
+        remove: () => toggleAccommodationFavorite(favorite.accommodation_id),
+      })),
+    ];
+
     return (
       <DashboardPanel eyebrow="Saved places" title="Your bookmarked spots">
         <div className="grid gap-3">
           {isLoading ? (
             <EmptyState text="Loading saved places..." />
-          ) : savedDestinations.length ? (
-            savedDestinations.map((favorite) => (
+          ) : savedPlaces.length ? (
+            savedPlaces.map((favorite) => (
               <article
                 className="grid gap-4 rounded-lg bg-mist p-4 lg:grid-cols-[96px_1fr_auto] lg:items-center"
-                key={`${favorite.destination_slug}-${favorite.created_at}`}
+                key={`${favorite.placeType}-${favorite.destination_slug || favorite.accommodation_id}-${favorite.created_at}`}
               >
                 <img
                   alt=""
                   className="h-20 w-full rounded-lg bg-white object-cover lg:h-16"
-                  src={destinationBySlug[favorite.destination_slug]?.image_url || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80'}
+                  src={favorite.image_url}
                 />
                 <div>
                   <h3 className="font-black">{favorite.title}</h3>
                   <p className="mt-1 text-sm text-slate-600">
-                    {favorite.location} - {favorite.category} - Best time: {favorite.bestTime}
+                    {favorite.placeType} - {favorite.location} - {favorite.category} - {favorite.bestTime}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-white px-3 text-sm font-extrabold text-ink"
-                    onClick={() => openReviewForm(favorite.destination_slug)}
-                    type="button"
-                  >
-                    <FaStar aria-hidden="true" />
-                    Review
-                  </button>
-                  <button
-                    className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-sea px-3 text-sm font-extrabold text-white"
-                    onClick={() => {
-                      setTravelForm((current) => ({ ...current, destination_slug: favorite.destination_slug }));
-                      setActiveTab('travel');
-                    }}
-                    type="button"
-                  >
-                    <FaRoute aria-hidden="true" />
-                    Plan
-                  </button>
+                  {favorite.review && (
+                    <button
+                      className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-white px-3 text-sm font-extrabold text-ink"
+                      onClick={favorite.review}
+                      type="button"
+                    >
+                      <FaStar aria-hidden="true" />
+                      Review
+                    </button>
+                  )}
+                  {favorite.plan && (
+                    <button
+                      className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-sea px-3 text-sm font-extrabold text-white"
+                      onClick={favorite.plan}
+                      type="button"
+                    >
+                      <FaRoute aria-hidden="true" />
+                      Plan
+                    </button>
+                  )}
                   <button
                     aria-label={`Remove ${favorite.title} from saved places`}
                     className="grid min-h-10 min-w-10 place-items-center rounded-lg bg-white text-rose-700"
-                    onClick={() => toggleFavorite(favorite.destination_slug)}
+                    onClick={favorite.remove}
                     type="button"
                   >
                     <FaTrash aria-hidden="true" />
@@ -426,7 +453,9 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
               <GoogleMapDemo
                 approvedReviews={approvedReviews}
                 destinations={mapPlaces}
+                onToggleAccommodationFavorite={toggleAccommodationFavorite}
                 onToggleFavorite={toggleFavorite}
+                savedAccommodationIds={savedAccommodationIds}
                 savedDestinationSlugs={savedDestinationSlugs}
               />
             </DashboardPanel>

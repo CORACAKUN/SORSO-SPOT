@@ -13,9 +13,18 @@ create table if not exists public.travel_plans (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.accommodation_favorites (
+  id uuid primary key default gen_random_uuid(),
+  user_email text not null,
+  accommodation_id uuid not null,
+  created_at timestamptz not null default now(),
+  unique (user_email, accommodation_id)
+);
+
 alter table public.submissions enable row level security;
 alter table public.reviews enable row level security;
 alter table public.travel_plans enable row level security;
+alter table public.accommodation_favorites enable row level security;
 
 drop policy if exists "Travelers and admins can read submissions" on public.submissions;
 drop policy if exists "Travelers can create their own submissions" on public.submissions;
@@ -168,6 +177,28 @@ with check (user_email = (auth.jwt() ->> 'email'));
 
 create policy "Travelers can delete their own travel plans"
 on public.travel_plans
+for delete
+to authenticated
+using (user_email = (auth.jwt() ->> 'email'));
+
+drop policy if exists "Travelers can read their own accommodation favorites" on public.accommodation_favorites;
+drop policy if exists "Travelers can create their own accommodation favorites" on public.accommodation_favorites;
+drop policy if exists "Travelers can delete their own accommodation favorites" on public.accommodation_favorites;
+
+create policy "Travelers can read their own accommodation favorites"
+on public.accommodation_favorites
+for select
+to authenticated
+using (user_email = (auth.jwt() ->> 'email'));
+
+create policy "Travelers can create their own accommodation favorites"
+on public.accommodation_favorites
+for insert
+to authenticated
+with check (user_email = (auth.jwt() ->> 'email'));
+
+create policy "Travelers can delete their own accommodation favorites"
+on public.accommodation_favorites
 for delete
 to authenticated
 using (user_email = (auth.jwt() ->> 'email'));
