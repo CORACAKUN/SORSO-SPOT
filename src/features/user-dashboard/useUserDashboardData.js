@@ -75,11 +75,63 @@ const fallbackDestinations = [
   },
 ];
 
+const fallbackAccommodations = [
+  {
+    id: 'fallback-city-hotel',
+    name: 'Sample City Hotel',
+    slug: 'sample-city-hotel',
+    accommodation_type: 'Hotel',
+    municipality: 'Sorsogon City',
+    address: 'Sorsogon City Center',
+    price_range: 'Budget to mid-range',
+    amenities: 'Wi-Fi, air conditioning, family rooms',
+    contact_info: 'Add official contact later',
+    image_url:
+      'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80',
+    latitude: 12.9742,
+    longitude: 123.9937,
+  },
+  {
+    id: 'fallback-beach-resort',
+    name: 'Sample Beach Resort',
+    slug: 'sample-beach-resort',
+    accommodation_type: 'Resort',
+    municipality: 'Matnog',
+    address: 'Near Matnog coastal area',
+    price_range: 'Mid-range',
+    amenities: 'Beach access, island hopping assistance, meals',
+    contact_info: 'Add official contact later',
+    image_url:
+      'https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?auto=format&fit=crop&w=1200&q=80',
+    latitude: 12.57,
+    longitude: 124.084,
+  },
+  {
+    id: 'fallback-nature-homestay',
+    name: 'Sample Nature Homestay',
+    slug: 'sample-nature-homestay',
+    accommodation_type: 'Homestay',
+    municipality: 'Bulusan',
+    address: 'Near Bulusan Lake area',
+    price_range: 'Budget',
+    amenities: 'Local host, nature access, breakfast option',
+    contact_info: 'Add official contact later',
+    image_url:
+      'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80',
+    latitude: 12.766,
+    longitude: 124.086,
+  },
+];
+
 export function useUserDashboardData(user) {
   const [destinations, setDestinations] = useState(fallbackDestinations);
+  const [accommodations, setAccommodations] = useState(fallbackAccommodations);
   const [favorites, setFavorites] = useState([]);
+  const [accommodationFavorites, setAccommodationFavorites] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [approvedReviews, setApprovedReviews] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [travelPlans, setTravelPlans] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
 
@@ -104,71 +156,218 @@ export function useUserDashboardData(user) {
     () => new Set(favorites.map((favorite) => favorite.destination_slug)),
     [favorites],
   );
+  const accommodationById = useMemo(() => {
+    return accommodations.reduce((map, accommodation) => {
+      map[String(accommodation.id)] = accommodation;
+      return map;
+    }, {});
+  }, [accommodations]);
+  const savedAccommodationIds = useMemo(
+    () => new Set(accommodationFavorites.map((favorite) => String(favorite.accommodation_id))),
+    [accommodationFavorites],
+  );
+  const savedAccommodations = accommodationFavorites.map((favorite) => {
+    const accommodation = accommodationById[String(favorite.accommodation_id)];
+    return {
+      ...favorite,
+      title: accommodation?.name || 'Saved accommodation',
+      location: accommodation?.municipality || 'Sorsogon',
+      category: accommodation?.accommodation_type || 'Accommodation',
+      bestTime: accommodation?.price_range || 'Contact listing',
+      image_url: accommodation?.image_url,
+      placeType: 'Accommodation',
+    };
+  });
+
+  async function loadDashboard({ silent = false, shouldApply = () => true } = {}) {
+    if (!supabase) {
+      setIsLoading(false);
+      return;
+    }
+
+    if (!silent) setIsLoading(true);
+    setMessage('');
+
+    const [
+      destinationsResult,
+      accommodationsResult,
+      favoritesResult,
+      accommodationFavoritesResult,
+      reviewsResult,
+      approvedReviewsResult,
+      submissionsResult,
+      travelPlansResult,
+    ] =
+      await Promise.all([
+        supabase
+          .from('destinations')
+          .select(
+            'name, slug, municipality, category, description, address, best_time, opening_hours, entrance_fee, contact_info, travel_tips, latitude, longitude, image_url, is_featured',
+          )
+          .eq('is_published', true)
+          .order('name', { ascending: true }),
+        supabase
+          .from('accommodations')
+          .select(
+            'id, name, accommodation_type, municipality, address, price_range, amenities, contact_info, image_url, latitude, longitude',
+          )
+          .eq('is_published', true)
+          .order('name', { ascending: true }),
+        supabase
+          .from('favorites')
+          .select('destination_slug, created_at')
+          .eq('user_email', user.email)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('accommodation_favorites')
+          .select('accommodation_id, created_at')
+          .eq('user_email', user.email)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('reviews')
+          .select('destination_slug, rating, title, body, status, created_at')
+          .eq('user_email', user.email)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('reviews')
+          .select('destination_slug, rating, title, body, user_email, created_at')
+          .eq('status', 'approved')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('submissions')
+          .select('submission_type, name, municipality, description, contact_info, status, submitted_at')
+          .eq('submitter_email', user.email)
+          .order('submitted_at', { ascending: false }),
+        supabase
+          .from('travel_plans')
+          .select('id, day, destination_slug, notes, sort_order, created_at')
+          .eq('user_email', user.email)
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true }),
+      ]);
+
+    if (!shouldApply()) return;
+
+    if (destinationsResult.data?.length) setDestinations(destinationsResult.data);
+    if (accommodationsResult.data?.length) setAccommodations(accommodationsResult.data);
+    setFavorites(favoritesResult.data || []);
+    setAccommodationFavorites(accommodationFavoritesResult.data || []);
+    setReviews(reviewsResult.data || []);
+    setApprovedReviews(approvedReviewsResult.data || []);
+    setSubmissions(submissionsResult.data || []);
+    setTravelPlans(travelPlansResult.data || []);
+
+    const firstError =
+      destinationsResult.error ||
+      accommodationsResult.error ||
+      favoritesResult.error ||
+      accommodationFavoritesResult.error ||
+      reviewsResult.error ||
+      approvedReviewsResult.error ||
+      submissionsResult.error ||
+      travelPlansResult.error;
+
+    if (firstError) {
+      setMessage(`Some dashboard data could not be loaded: ${firstError.message}`);
+    }
+
+    setIsLoading(false);
+  }
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadDashboard() {
-      if (!supabase) {
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      setMessage('');
-
-      const [destinationsResult, favoritesResult, reviewsResult, submissionsResult] =
-        await Promise.all([
-          supabase
-            .from('destinations')
-            .select(
-              'name, slug, municipality, category, description, address, best_time, opening_hours, entrance_fee, contact_info, travel_tips, latitude, longitude, image_url, is_featured',
-            )
-            .eq('is_published', true)
-            .order('name', { ascending: true }),
-          supabase
-            .from('favorites')
-            .select('destination_slug, created_at')
-            .eq('user_email', user.email)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('reviews')
-            .select('destination_slug, rating, title, body, status, created_at')
-            .eq('user_email', user.email)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('submissions')
-            .select('submission_type, name, municipality, status, submitted_at')
-            .eq('submitter_email', user.email)
-            .order('submitted_at', { ascending: false }),
-        ]);
-
-      if (!isMounted) return;
-
-      if (destinationsResult.data?.length) setDestinations(destinationsResult.data);
-      setFavorites(favoritesResult.data || []);
-      setReviews(reviewsResult.data || []);
-      setSubmissions(submissionsResult.data || []);
-
-      const firstError =
-        destinationsResult.error ||
-        favoritesResult.error ||
-        reviewsResult.error ||
-        submissionsResult.error;
-
-      if (firstError) {
-        setMessage(`Some dashboard data could not be loaded: ${firstError.message}`);
-      }
-
-      setIsLoading(false);
-    }
-
-    loadDashboard();
+    loadDashboard({ shouldApply: () => isMounted });
 
     return () => {
       isMounted = false;
     };
   }, [user.email]);
+
+  async function addReview(review) {
+    if (!supabase) return { error: { message: 'Supabase is not configured yet.' } };
+
+    setMessage('');
+    const { data, error } = await supabase
+      .from('reviews')
+      .insert({
+        destination_slug: review.destination_slug,
+        rating: Number(review.rating),
+        title: review.title.trim(),
+        body: review.body.trim(),
+        status: 'pending',
+        user_email: user.email,
+      })
+      .select('destination_slug, rating, title, body, status, created_at')
+      .single();
+
+    if (error) return { error };
+
+    setReviews((current) => [data, ...current]);
+    return { data };
+  }
+
+  async function addSubmission(submission) {
+    if (!supabase) return { error: { message: 'Supabase is not configured yet.' } };
+
+    setMessage('');
+    const { data, error } = await supabase
+      .from('submissions')
+      .insert({
+        submission_type: submission.submission_type,
+        name: submission.name.trim(),
+        municipality: submission.municipality.trim(),
+        description: submission.description.trim() || null,
+        contact_info: submission.contact_info.trim() || null,
+        status: 'pending',
+        submitter_email: user.email,
+      })
+      .select('submission_type, name, municipality, description, contact_info, status, submitted_at')
+      .single();
+
+    if (error) return { error };
+
+    setSubmissions((current) => [data, ...current]);
+    return { data };
+  }
+
+  async function addTravelPlan(plan) {
+    if (!supabase) return { error: { message: 'Supabase is not configured yet.' } };
+
+    setMessage('');
+    const { data, error } = await supabase
+      .from('travel_plans')
+      .insert({
+        user_email: user.email,
+        day: plan.day.trim(),
+        destination_slug: plan.destination_slug,
+        notes: plan.notes.trim() || null,
+        sort_order: travelPlans.length + 1,
+      })
+      .select('id, day, destination_slug, notes, sort_order, created_at')
+      .single();
+
+    if (error) return { error };
+
+    setTravelPlans((current) => [...current, data]);
+    return { data };
+  }
+
+  async function removeTravelPlan(planId) {
+    if (!supabase || !planId) return { error: { message: 'Missing travel plan id.' } };
+
+    setMessage('');
+    const { error } = await supabase
+      .from('travel_plans')
+      .delete()
+      .eq('id', planId)
+      .eq('user_email', user.email);
+
+    if (error) return { error };
+
+    setTravelPlans((current) => current.filter((plan) => plan.id !== planId));
+    return {};
+  }
 
   async function toggleFavorite(destinationSlug) {
     if (!supabase || !destinationSlug) return;
@@ -211,15 +410,68 @@ export function useUserDashboardData(user) {
     setFavorites((current) => [data, ...current]);
   }
 
+  async function toggleAccommodationFavorite(accommodationId) {
+    if (!supabase || !accommodationId) return;
+
+    const normalizedId = String(accommodationId);
+    setMessage('');
+    const isSaved = savedAccommodationIds.has(normalizedId);
+
+    if (isSaved) {
+      const { error } = await supabase
+        .from('accommodation_favorites')
+        .delete()
+        .eq('user_email', user.email)
+        .eq('accommodation_id', normalizedId);
+
+      if (error) {
+        setMessage(`Unable to remove saved accommodation: ${error.message}`);
+        return;
+      }
+
+      setAccommodationFavorites((current) =>
+        current.filter((favorite) => String(favorite.accommodation_id) !== normalizedId),
+      );
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('accommodation_favorites')
+      .insert({
+        user_email: user.email,
+        accommodation_id: normalizedId,
+      })
+      .select('accommodation_id, created_at')
+      .single();
+
+    if (error) {
+      setMessage(`Unable to save accommodation: ${error.message}`);
+      return;
+    }
+
+    setAccommodationFavorites((current) => [data, ...current]);
+  }
+
   return {
+    addReview,
+    addSubmission,
+    addTravelPlan,
+    accommodations,
+    approvedReviews,
     destinations,
     isLoading,
+    loadDashboard,
     message,
     reviews,
+    savedAccommodationIds,
+    savedAccommodations,
     savedDestinationSlugs,
     savedDestinations,
     setMessage,
     submissions,
+    toggleAccommodationFavorite,
     toggleFavorite,
+    travelPlans,
+    removeTravelPlan,
   };
 }
