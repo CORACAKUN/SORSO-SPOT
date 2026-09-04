@@ -32,7 +32,7 @@ const fallbackDestinations = [
   },
 ];
 
-const activities = [
+const fallbackActivities = [
   {
     name: 'Whale shark watching',
     description:
@@ -137,6 +137,20 @@ function mapStayCards(rows) {
       stay.image_url ||
       'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80',
     alt: `${stay.name} accommodation`,
+  }));
+}
+
+function mapActivityCards(rows) {
+  return rows.map((activity) => ({
+    name: activity.name,
+    description:
+      joinParts([
+        activity.activity_type,
+        activity.difficulty,
+        activity.season,
+        activity.description,
+        activity.safety_notes,
+      ]) || 'Published Sorsogon activity.',
   }));
 }
 
@@ -344,7 +358,7 @@ function Destinations({ items }) {
   );
 }
 
-function Adventure() {
+function Adventure({ items }) {
   return (
     <section
       className="grid gap-10 px-4 py-16 sm:py-20 lg:grid-cols-[.9fr_1.1fr] lg:gap-20 lg:px-16 lg:py-28"
@@ -362,7 +376,7 @@ function Adventure() {
       </div>
 
       <div className="grid gap-4">
-        {activities.map((activity, index) => (
+        {items.map((activity, index) => (
           <article
             className="grid grid-cols-[54px_1fr] gap-4 rounded-lg border border-slate-200 bg-white p-5"
             key={activity.name}
@@ -474,6 +488,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const [publicDestinations, setPublicDestinations] = useState(fallbackDestinations);
+  const [publicActivities, setPublicActivities] = useState(fallbackActivities);
   const [publicStays, setPublicStays] = useState(fallbackStays);
   const [publicRoutes, setPublicRoutes] = useState(fallbackRoutes);
   const [currentView, setCurrentView] = useState('site');
@@ -505,12 +520,18 @@ export default function App() {
     let isMounted = true;
 
     async function loadPublicContent() {
-      const [destinationsResult, accommodationsResult, routesResult] = await Promise.all([
+      const [destinationsResult, activitiesResult, accommodationsResult, routesResult] = await Promise.all([
         supabase
           .from('destinations')
           .select('name, municipality, category, best_time, image_url, is_featured')
           .eq('is_published', true)
           .order('is_featured', { ascending: false })
+          .order('name', { ascending: true })
+          .limit(3),
+        supabase
+          .from('activities')
+          .select('name, activity_type, difficulty, season, description, safety_notes')
+          .eq('is_published', true)
           .order('name', { ascending: true })
           .limit(3),
         supabase
@@ -531,6 +552,9 @@ export default function App() {
 
       if (destinationsResult.data?.length) {
         setPublicDestinations(mapDestinationCards(destinationsResult.data));
+      }
+      if (activitiesResult.data?.length) {
+        setPublicActivities(mapActivityCards(activitiesResult.data));
       }
       if (accommodationsResult.data?.length) {
         setPublicStays(mapStayCards(accommodationsResult.data));
@@ -686,7 +710,7 @@ export default function App() {
         <Hero />
         <QuickLinks />
         <Destinations items={publicDestinations} />
-        <Adventure />
+        <Adventure items={publicActivities} />
         <Stay items={publicStays} />
         <Transport items={publicRoutes} />
         <Itinerary />
