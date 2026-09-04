@@ -130,6 +130,7 @@ export function useUserDashboardData(user) {
   const [reviews, setReviews] = useState([]);
   const [approvedReviews, setApprovedReviews] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [travelPlans, setTravelPlans] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
 
@@ -171,6 +172,7 @@ export function useUserDashboardData(user) {
       reviewsResult,
       approvedReviewsResult,
       submissionsResult,
+      travelPlansResult,
     ] =
       await Promise.all([
         supabase
@@ -207,6 +209,12 @@ export function useUserDashboardData(user) {
           .select('submission_type, name, municipality, description, contact_info, status, submitted_at')
           .eq('submitter_email', user.email)
           .order('submitted_at', { ascending: false }),
+        supabase
+          .from('travel_plans')
+          .select('id, day, destination_slug, notes, sort_order, created_at')
+          .eq('user_email', user.email)
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true }),
       ]);
 
     if (!shouldApply()) return;
@@ -217,6 +225,7 @@ export function useUserDashboardData(user) {
     setReviews(reviewsResult.data || []);
     setApprovedReviews(approvedReviewsResult.data || []);
     setSubmissions(submissionsResult.data || []);
+    setTravelPlans(travelPlansResult.data || []);
 
     const firstError =
       destinationsResult.error ||
@@ -224,7 +233,8 @@ export function useUserDashboardData(user) {
       favoritesResult.error ||
       reviewsResult.error ||
       approvedReviewsResult.error ||
-      submissionsResult.error;
+      submissionsResult.error ||
+      travelPlansResult.error;
 
     if (firstError) {
       setMessage(`Some dashboard data could not be loaded: ${firstError.message}`);
@@ -290,6 +300,44 @@ export function useUserDashboardData(user) {
     return { data };
   }
 
+  async function addTravelPlan(plan) {
+    if (!supabase) return { error: { message: 'Supabase is not configured yet.' } };
+
+    setMessage('');
+    const { data, error } = await supabase
+      .from('travel_plans')
+      .insert({
+        user_email: user.email,
+        day: plan.day.trim(),
+        destination_slug: plan.destination_slug,
+        notes: plan.notes.trim() || null,
+        sort_order: travelPlans.length + 1,
+      })
+      .select('id, day, destination_slug, notes, sort_order, created_at')
+      .single();
+
+    if (error) return { error };
+
+    setTravelPlans((current) => [...current, data]);
+    return { data };
+  }
+
+  async function removeTravelPlan(planId) {
+    if (!supabase || !planId) return { error: { message: 'Missing travel plan id.' } };
+
+    setMessage('');
+    const { error } = await supabase
+      .from('travel_plans')
+      .delete()
+      .eq('id', planId)
+      .eq('user_email', user.email);
+
+    if (error) return { error };
+
+    setTravelPlans((current) => current.filter((plan) => plan.id !== planId));
+    return {};
+  }
+
   async function toggleFavorite(destinationSlug) {
     if (!supabase || !destinationSlug) return;
 
@@ -334,6 +382,7 @@ export function useUserDashboardData(user) {
   return {
     addReview,
     addSubmission,
+    addTravelPlan,
     accommodations,
     approvedReviews,
     destinations,
@@ -346,5 +395,7 @@ export function useUserDashboardData(user) {
     setMessage,
     submissions,
     toggleFavorite,
+    travelPlans,
+    removeTravelPlan,
   };
 }

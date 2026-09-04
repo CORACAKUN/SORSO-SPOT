@@ -85,12 +85,13 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
   const [isSubmissionFormOpen, setIsSubmissionFormOpen] = useState(false);
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [isSavingSubmission, setIsSavingSubmission] = useState(false);
-  const [travelPlans, setTravelPlans] = useState([]);
+  const [isSavingTravelPlan, setIsSavingTravelPlan] = useState(false);
   const [travelForm, setTravelForm] = useState({ day: 'Day 1', destination_slug: '', notes: '' });
   const {
     accommodations,
     addReview,
     addSubmission,
+    addTravelPlan,
     approvedReviews,
     destinations,
     isLoading,
@@ -101,6 +102,8 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
     setMessage,
     submissions,
     toggleFavorite,
+    travelPlans,
+    removeTravelPlan,
   } = useUserDashboardData(user);
 
   const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Traveler';
@@ -163,23 +166,6 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
     }
   }, [destinationOptions, reviewForm.destination_slug, travelForm.destination_slug]);
 
-  useEffect(() => {
-    const storageKey = `sorso-travel-plans-${user.id}`;
-    const savedPlans = window.localStorage.getItem(storageKey);
-    if (savedPlans) {
-      try {
-        setTravelPlans(JSON.parse(savedPlans));
-      } catch {
-        setTravelPlans([]);
-      }
-    }
-  }, [user.id]);
-
-  useEffect(() => {
-    const storageKey = `sorso-travel-plans-${user.id}`;
-    window.localStorage.setItem(storageKey, JSON.stringify(travelPlans));
-  }, [travelPlans, user.id]);
-
   async function handleSignOut() {
     if (!supabase) return;
 
@@ -241,26 +227,29 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
     setMessage('Submission sent. Admin will review it before publishing.');
   }
 
-  function addTravelPlan(event) {
+  async function submitTravelPlan(event) {
     event.preventDefault();
-    if (!travelForm.destination_slug) {
-      setMessage('Choose a destination for the travel plan.');
+    if (!travelForm.day.trim() || !travelForm.destination_slug) {
+      setMessage('Day and destination are required for the travel plan.');
       return;
     }
 
-    setTravelPlans((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        ...travelForm,
-      },
-    ]);
+    setIsSavingTravelPlan(true);
+    const { error } = await addTravelPlan(travelForm);
+    setIsSavingTravelPlan(false);
+
+    if (error) {
+      setMessage(`Unable to add travel plan: ${error.message}`);
+      return;
+    }
+
     setTravelForm({ day: `Day ${travelPlans.length + 2}`, destination_slug: destinationOptions[0]?.slug || '', notes: '' });
     setMessage('');
   }
 
-  function removeTravelPlan(id) {
-    setTravelPlans((current) => current.filter((plan) => plan.id !== id));
+  async function deleteTravelPlan(id) {
+    const { error } = await removeTravelPlan(id);
+    if (error) setMessage(`Unable to remove travel plan: ${error.message}`);
   }
 
   function renderSavedPlaces() {
@@ -579,7 +568,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
 
           {activeTab === 'travel' && (
             <DashboardPanel eyebrow="Travel plans" title="Build an itinerary">
-              <form className="grid gap-4 rounded-lg bg-mist p-4 lg:grid-cols-[150px_1fr_1fr_auto] lg:items-end" onSubmit={addTravelPlan}>
+              <form className="grid gap-4 rounded-lg bg-mist p-4 lg:grid-cols-[150px_1fr_1fr_auto] lg:items-end" onSubmit={submitTravelPlan}>
                 <Field
                   label="Day"
                   name="day"
@@ -609,11 +598,12 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                   value={travelForm.notes}
                 />
                 <button
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-sea px-4 text-sm font-extrabold text-white"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-sea px-4 text-sm font-extrabold text-white disabled:opacity-60"
+                  disabled={isSavingTravelPlan}
                   type="submit"
                 >
                   <FaPlus aria-hidden="true" />
-                  Add
+                  {isSavingTravelPlan ? 'Adding...' : 'Add'}
                 </button>
               </form>
 
@@ -636,7 +626,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                         <button
                           aria-label="Remove travel plan item"
                           className="grid min-h-10 min-w-10 place-items-center rounded-lg bg-rose-50 text-rose-700"
-                          onClick={() => removeTravelPlan(plan.id)}
+                          onClick={() => deleteTravelPlan(plan.id)}
                           type="button"
                         >
                           <FaTrash aria-hidden="true" />
