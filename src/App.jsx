@@ -4,7 +4,7 @@ import AdminDashboard from './features/admin-dashboard/AdminDashboard.jsx';
 import UserDashboard from './features/user-dashboard/UserDashboard.jsx';
 import { supabase } from './lib/supabaseClient';
 
-const destinations = [
+const fallbackDestinations = [
   {
     municipality: 'Bulusan',
     name: 'Bulusan Lake',
@@ -48,7 +48,7 @@ const activities = [
   },
 ];
 
-const stays = [
+const fallbackStays = [
   {
     name: 'Beach Resorts',
     location: 'Sta. Magdalena',
@@ -75,7 +75,7 @@ const stays = [
   },
 ];
 
-const routes = [
+const fallbackRoutes = [
   {
     title: 'From Manila',
     text: 'Overnight bus to Sorsogon City or travel via Bicol airport, then van or bus onward.',
@@ -108,6 +108,46 @@ const itinerary = [
     text: 'Choose island hopping for beaches or wildlife touring in Donsol.',
   },
 ];
+
+function joinParts(parts) {
+  return parts.filter(Boolean).join(' - ');
+}
+
+function mapDestinationCards(rows) {
+  return rows.map((destination, index) => ({
+    municipality: destination.municipality || 'Sorsogon',
+    name: destination.name,
+    details: joinParts([destination.category, destination.best_time]),
+    image:
+      destination.image_url ||
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+    alt: `${destination.name} in ${destination.municipality || 'Sorsogon'}`,
+    large: index === 0,
+  }));
+}
+
+function mapStayCards(rows) {
+  return rows.map((stay) => ({
+    name: stay.name,
+    location: stay.municipality || 'Sorsogon',
+    description:
+      joinParts([stay.accommodation_type, stay.price_range, stay.amenities]) ||
+      'Published accommodation listing.',
+    image:
+      stay.image_url ||
+      'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80',
+    alt: `${stay.name} accommodation`,
+  }));
+}
+
+function mapRouteCards(rows) {
+  return rows.map((route) => ({
+    title: `${route.origin} to ${route.destination}`,
+    text:
+      joinParts([route.transport_type, route.duration, route.cost_range, route.notes]) ||
+      'Published transport route.',
+  }));
+}
 
 function Header({ isAdmin, onAdminOpen, onAuthOpen, onDashboardOpen, user }) {
   return (
@@ -269,7 +309,7 @@ function QuickLinks() {
   );
 }
 
-function Destinations() {
+function Destinations({ items }) {
   return (
     <section className="px-4 py-16 sm:py-20 lg:px-16 lg:py-28" id="spots">
       <div className="mb-7 max-w-3xl">
@@ -280,7 +320,7 @@ function Destinations() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
-        {destinations.map((destination) => (
+        {items.map((destination) => (
           <article
             className={`group relative min-h-80 overflow-hidden rounded-lg bg-ink ${
               destination.large ? 'lg:row-span-2 lg:min-h-[638px]' : 'lg:min-h-[310px]'
@@ -341,7 +381,7 @@ function Adventure() {
   );
 }
 
-function Stay() {
+function Stay({ items }) {
   return (
     <section className="bg-mist px-4 py-16 sm:py-20 lg:px-16 lg:py-28" id="stay">
       <div className="mb-7 max-w-3xl">
@@ -352,7 +392,7 @@ function Stay() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {stays.map((stay) => (
+        {items.map((stay) => (
           <article className="rounded-lg border border-slate-200 bg-white p-5" key={stay.name}>
             <img className="mb-5 aspect-[4/3] rounded-lg object-cover" src={stay.image} alt={stay.alt} />
             <h3 className="mb-2 text-xl font-black">{stay.name}</h3>
@@ -365,7 +405,7 @@ function Stay() {
   );
 }
 
-function Transport() {
+function Transport({ items }) {
   return (
     <section className="px-4 py-16 sm:py-20 lg:px-16 lg:py-28" id="transport">
       <div className="mb-7 max-w-3xl">
@@ -376,7 +416,7 @@ function Transport() {
       </div>
 
       <div className="grid border-l border-t border-slate-200 sm:grid-cols-2 lg:grid-cols-4">
-        {routes.map((route) => (
+        {items.map((route) => (
           <article className="min-h-52 border-b border-r border-slate-200 p-6" key={route.title}>
             <strong className="mb-3 block text-lg text-sea">{route.title}</strong>
             <p className="text-slate-600">{route.text}</p>
@@ -433,6 +473,9 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(false);
+  const [publicDestinations, setPublicDestinations] = useState(fallbackDestinations);
+  const [publicStays, setPublicStays] = useState(fallbackStays);
+  const [publicRoutes, setPublicRoutes] = useState(fallbackRoutes);
   const [currentView, setCurrentView] = useState('site');
   const [authModal, setAuthModal] = useState({
     isOpen: false,
@@ -455,6 +498,54 @@ export default function App() {
   function closeAuthModal() {
     setAuthModal((current) => ({ ...current, isOpen: false }));
   }
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+
+    let isMounted = true;
+
+    async function loadPublicContent() {
+      const [destinationsResult, accommodationsResult, routesResult] = await Promise.all([
+        supabase
+          .from('destinations')
+          .select('name, municipality, category, best_time, image_url, is_featured')
+          .eq('is_published', true)
+          .order('is_featured', { ascending: false })
+          .order('name', { ascending: true })
+          .limit(3),
+        supabase
+          .from('accommodations')
+          .select('name, municipality, accommodation_type, price_range, amenities, image_url')
+          .eq('is_published', true)
+          .order('name', { ascending: true })
+          .limit(3),
+        supabase
+          .from('transport_routes')
+          .select('origin, destination, transport_type, duration:estimated_duration, cost_range:estimated_cost, notes:route_notes')
+          .eq('is_published', true)
+          .order('origin', { ascending: true })
+          .limit(4),
+      ]);
+
+      if (!isMounted) return;
+
+      if (destinationsResult.data?.length) {
+        setPublicDestinations(mapDestinationCards(destinationsResult.data));
+      }
+      if (accommodationsResult.data?.length) {
+        setPublicStays(mapStayCards(accommodationsResult.data));
+      }
+      if (routesResult.data?.length) {
+        setPublicRoutes(mapRouteCards(routesResult.data));
+      }
+    }
+
+    loadPublicContent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -594,10 +685,10 @@ export default function App() {
       <main>
         <Hero />
         <QuickLinks />
-        <Destinations />
+        <Destinations items={publicDestinations} />
         <Adventure />
-        <Stay />
-        <Transport />
+        <Stay items={publicStays} />
+        <Transport items={publicRoutes} />
         <Itinerary />
       </main>
       <Footer />
