@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import ActivitiesManager from './components/ActivitiesManager.jsx';
+import AccommodationsManager from './components/AccommodationsManager.jsx';
 import DestinationManager from './components/DestinationManager.jsx';
 import MapManager from './components/MapManager.jsx';
 import OverviewManager from './components/OverviewManager.jsx';
 import SubmissionsManager from './components/SubmissionsManager.jsx';
-import AccommodationsManager from './components/AccommodationsManager.jsx';
 import ReviewsManager from './components/ReviewsManager.jsx';
 import SettingsManager from './components/SettingsManager.jsx';
 import TransportManager from './components/TransportManager.jsx';
@@ -18,6 +19,7 @@ const adminTabs = [
   { id: 'map', label: 'Map', icon: 'MP' },
   { id: 'submissions', label: 'Submissions', icon: 'SB' },
   { id: 'accommodations', label: 'Accommodations', icon: 'AC' },
+  { id: 'activities', label: 'Activities', icon: 'AV' },
   { id: 'reviews', label: 'Reviews', icon: 'RV' },
   { id: 'transport', label: 'Transport', icon: 'TR' },
   { id: 'users', label: 'Users', icon: 'US' },
@@ -44,6 +46,11 @@ const moduleDescriptions = {
     'Accommodation Management',
     'Manage hotels, resorts, inns, and homestays.',
     ['Price range and amenities', 'Contact information', 'Publish/unpublish listing'],
+  ],
+  activities: [
+    'Activity Management',
+    'Manage tours, hikes, marine activities, and seasonal things to do.',
+    ['Activity type and difficulty', 'Season and cost notes', 'Publish/unpublish cards'],
   ],
   reviews: [
     'Reviews Moderation',
@@ -219,6 +226,8 @@ export default function AdminDashboard({ user, onBack, onTravelerOpen }) {
             <SubmissionsManager />
           ) : activeTab === 'accommodations' ? (
             <AccommodationsManager />
+          ) : activeTab === 'activities' ? (
+            <ActivitiesManager />
           ) : activeTab === 'reviews' ? (
             <ReviewsManager />
           ) : activeTab === 'transport' ? (

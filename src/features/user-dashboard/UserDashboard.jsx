@@ -74,6 +74,11 @@ function StatusBadge({ status }) {
   );
 }
 
+function isSettingEnabled(settings, key) {
+  const value = String(settings[key] ?? 'true').trim().toLowerCase();
+  return !['false', '0', 'no', 'off', 'disabled'].includes(value);
+}
+
 export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBack }) {
   const [activeTab, setActiveTab] = useState('explore');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -102,6 +107,7 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
     savedDestinationSlugs,
     savedDestinations,
     setMessage,
+    siteSettings,
     submissions,
     toggleAccommodationFavorite,
     toggleFavorite,
@@ -110,6 +116,8 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
   } = useUserDashboardData(user);
 
   const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Traveler';
+  const areReviewsEnabled = isSettingEnabled(siteSettings, 'reviews_enabled');
+  const areSubmissionsEnabled = isSettingEnabled(siteSettings, 'submissions_enabled');
   const destinationOptions = useMemo(
     () => destinations.map((destination) => ({
       label: destination.name,
@@ -180,6 +188,11 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
   }
 
   function openReviewForm(destinationSlug = '') {
+    if (!areReviewsEnabled) {
+      setMessage('Reviews are currently closed by the admin.');
+      return;
+    }
+
     setReviewForm({
       ...emptyReviewForm,
       destination_slug: destinationSlug || destinationOptions[0]?.slug || '',
@@ -190,6 +203,11 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
 
   async function submitReview(event) {
     event.preventDefault();
+    if (!areReviewsEnabled) {
+      setMessage('Reviews are currently closed by the admin.');
+      return;
+    }
+
     if (!reviewForm.destination_slug || !reviewForm.title.trim() || !reviewForm.body.trim()) {
       setMessage('Destination, title, and review text are required.');
       return;
@@ -211,6 +229,11 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
 
   async function submitPlace(event) {
     event.preventDefault();
+    if (!areSubmissionsEnabled) {
+      setMessage('Submissions are currently closed by the admin.');
+      return;
+    }
+
     if (!submissionForm.name.trim() || !submissionForm.municipality.trim()) {
       setMessage('Place name and municipality are required.');
       return;
@@ -489,13 +512,20 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                   </p>
                   <button
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-sea px-4 text-sm font-extrabold text-white"
+                    disabled={!areReviewsEnabled}
                     onClick={() => openReviewForm()}
                     type="button"
                   >
                     <FaPlus aria-hidden="true" />
-                    Write review
+                    {areReviewsEnabled ? 'Write review' : 'Reviews closed'}
                   </button>
                 </div>
+
+                {!areReviewsEnabled && (
+                  <p className="mb-5 rounded-lg bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                    Reviews are currently closed by the admin.
+                  </p>
+                )}
 
                 <div className="grid gap-3">
                 {isLoading ? (
@@ -555,16 +585,27 @@ export default function UserDashboard({ isAdmin = false, onAdminOpen, user, onBa
                   </p>
                   <button
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-sea px-4 text-sm font-extrabold text-white"
+                    disabled={!areSubmissionsEnabled}
                     onClick={() => {
+                      if (!areSubmissionsEnabled) {
+                        setMessage('Submissions are currently closed by the admin.');
+                        return;
+                      }
                       setSubmissionForm(emptySubmissionForm);
                       setIsSubmissionFormOpen(true);
                     }}
                     type="button"
                   >
                     <FaPlus aria-hidden="true" />
-                    Submit
+                    {areSubmissionsEnabled ? 'Submit' : 'Submissions closed'}
                   </button>
                 </div>
+
+                {!areSubmissionsEnabled && (
+                  <p className="mb-5 rounded-lg bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                    Submissions are currently closed by the admin.
+                  </p>
+                )}
 
                 <div className="grid gap-3">
                 {isLoading ? (

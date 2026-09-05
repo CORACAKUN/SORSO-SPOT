@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  FaHiking,
   FaBed,
   FaClipboardList,
   FaMapMarkedAlt,
@@ -16,6 +17,7 @@ const emptyOverview = {
   submissions: [],
   reviews: [],
   accommodations: [],
+  activities: [],
   routes: [],
   profiles: [],
 };
@@ -84,6 +86,7 @@ export default function OverviewManager({ user, onOpenTab }) {
       submissions: supabase.from('submissions').select('status'),
       reviews: supabase.from('reviews').select('status, rating'),
       accommodations: supabase.from('accommodations').select('is_published'),
+      activities: supabase.from('activities').select('is_published'),
       routes: supabase.from('transport_routes').select('is_published'),
       profiles: supabase.from('profiles').select('role'),
     };
@@ -138,6 +141,7 @@ export default function OverviewManager({ user, onOpenTab }) {
       pendingReviews,
       averageRating,
       publishedAccommodations: overview.accommodations.filter((item) => item.is_published).length,
+      publishedActivities: overview.activities.filter((item) => item.is_published).length,
       publishedRoutes: overview.routes.filter((item) => item.is_published).length,
       admins: overview.profiles.filter((item) => item.role === 'admin').length,
       travelers: overview.profiles.filter((item) => item.role !== 'admin').length,
@@ -239,6 +243,15 @@ export default function OverviewManager({ user, onOpenTab }) {
               <div>
                 <p className="font-black">{summary.publishedAccommodations} accommodations published</p>
                 <p className="text-sm text-slate-600">Hotels, resorts, inns, and homestays.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg bg-mist p-4">
+              <span className="grid size-10 place-items-center rounded-lg bg-white text-sea">
+                <FaHiking aria-hidden="true" />
+              </span>
+              <div>
+                <p className="font-black">{summary.publishedActivities} activities published</p>
+                <p className="text-sm text-slate-600">Tours, hikes, island trips, and seasonal experiences.</p>
               </div>
             </div>
             <div className="flex items-center gap-3 rounded-lg bg-mist p-4">

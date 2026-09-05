@@ -1,9 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FaPlus, FaRedoAlt, FaTimes } from 'react-icons/fa';
+import { FaPlus, FaRedoAlt, FaTimes, FaToggleOff, FaToggleOn, FaTrash } from 'react-icons/fa';
 import ShellCard from '../../../components/shared/ShellCard.jsx';
 import { supabase } from '../../../lib/supabaseClient';
 
 const emptyForm = { key: '', value: '', description: '' };
+const featureFlags = [
+  {
+    description: 'Allow travelers to submit destination reviews.',
+    key: 'reviews_enabled',
+    label: 'Reviews',
+  },
+  {
+    description: 'Allow travelers to suggest places, routes, stays, and activities.',
+    key: 'submissions_enabled',
+    label: 'Submissions',
+  },
+];
+
+function isEnabled(value) {
+  return !['false', '0', 'no', 'off', 'disabled'].includes(String(value ?? 'true').trim().toLowerCase());
+}
 
 export default function SettingsManager() {
   const [settings, setSettings] = useState([]);
@@ -12,7 +28,9 @@ export default function SettingsManager() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingKey, setDeletingKey] = useState('');
   const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
 
   const settingsByKey = useMemo(() => {
     return settings.reduce((map, item) => {
@@ -20,6 +38,17 @@ export default function SettingsManager() {
       return map;
     }, {});
   }, [settings]);
+
+  const filteredSettings = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return settings;
+
+    return settings.filter((setting) =>
+      [setting.key, setting.value, setting.description]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(query)),
+    );
+  }, [search, settings]);
 
   async function loadSettings() {
     if (!supabase) return;
@@ -99,6 +128,52 @@ export default function SettingsManager() {
     loadSettings();
   }
 
+  async function deleteSetting(setting) {
+    const shouldDelete = window.confirm(`Delete ${setting.key} permanently?`);
+    if (!shouldDelete) return;
+
+    setDeletingKey(setting.key);
+    setMessage('');
+
+    const { error } = await supabase.from('site_settings').delete().eq('key', setting.key);
+
+    setDeletingKey('');
+    if (error) {
+      setMessage(`Unable to delete setting: ${error.message}`);
+      return;
+    }
+
+    setSettings((current) => current.filter((item) => item.key !== setting.key));
+  }
+
+  async function toggleFeatureFlag(flag) {
+    const currentValue = settingsByKey[flag.key];
+    const nextValue = isEnabled(currentValue) ? 'false' : 'true';
+    const payload = {
+      key: flag.key,
+      value: nextValue,
+      description: flag.description,
+      updated_at: new Date().toISOString(),
+    };
+
+    setMessage('');
+    const { data, error } = await supabase
+      .from('site_settings')
+      .upsert(payload, { onConflict: 'key' })
+      .select()
+      .single();
+
+    if (error) {
+      setMessage(`Unable to update ${flag.label.toLowerCase()}: ${error.message}`);
+      return;
+    }
+
+    setSettings((current) => {
+      const exists = current.some((item) => item.key === data.key);
+      return exists ? current.map((item) => (item.key === data.key ? data : item)) : [...current, data];
+    });
+  }
+
   return (
     <div className="grid gap-6">
       <section className="grid gap-4 md:grid-cols-3">
@@ -121,6 +196,30 @@ export default function SettingsManager() {
       </section>
 
       <ShellCard>
+        <div className="mb-6 grid gap-3 md:grid-cols-2">
+          {featureFlags.map((flag) => {
+            const enabled = isEnabled(settingsByKey[flag.key]);
+            const Icon = enabled ? FaToggleOn : FaToggleOff;
+
+            return (
+              <button
+                className="flex min-h-20 items-center justify-between gap-4 rounded-lg bg-mist p-4 text-left transition hover:bg-slate-200"
+                key={flag.key}
+                onClick={() => toggleFeatureFlag(flag)}
+                type="button"
+              >
+                <span>
+                  <span className="block text-xs font-black uppercase text-sea">{flag.label}</span>
+                  <span className="mt-1 block text-sm font-semibold text-slate-600">
+                    {enabled ? 'Open to travelers' : 'Closed to travelers'}
+                  </span>
+                </span>
+                <Icon className={`text-3xl ${enabled ? 'text-sea' : 'text-slate-400'}`} aria-hidden="true" />
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-black uppercase text-sea">Settings</p>
@@ -130,6 +229,13 @@ export default function SettingsManager() {
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20 md:w-72"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search settings"
+              type="search"
+              value={search}
+            />
             <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-extrabold text-ink" disabled={isLoading} onClick={loadSettings} type="button">
               <FaRedoAlt aria-hidden="true" />
               Refresh
@@ -146,15 +252,20 @@ export default function SettingsManager() {
         <div className="mt-6 grid gap-3">
           {isLoading ? (
             <p className="rounded-lg bg-mist p-4 text-sm font-semibold text-slate-600">Loading settings...</p>
-          ) : settings.length ? (
-            settings.map((setting) => (
+          ) : filteredSettings.length ? (
+            filteredSettings.map((setting) => (
               <article className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[1fr_1fr_auto] md:items-center" key={setting.key}>
                 <div>
                   <h3 className="font-black">{setting.key}</h3>
                   <p className="mt-1 text-sm text-slate-600">{setting.description || 'No description'}</p>
                 </div>
                 <p className="break-words rounded-lg bg-mist p-3 text-sm font-semibold text-ink">{setting.value || 'empty'}</p>
-                <button className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm font-extrabold text-ink" onClick={() => openEditForm(setting)} type="button">Edit</button>
+                <div className="flex flex-wrap gap-2">
+                  <button className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm font-extrabold text-ink disabled:opacity-60" disabled={deletingKey === setting.key} onClick={() => openEditForm(setting)} type="button">Edit</button>
+                  <button className="grid min-h-10 min-w-10 place-items-center rounded-lg border border-rose-200 bg-white px-3 text-sm font-extrabold text-rose-700 disabled:opacity-60" disabled={deletingKey === setting.key} onClick={() => deleteSetting(setting)} title="Delete setting" type="button">
+                    <FaTrash aria-hidden="true" />
+                  </button>
+                </div>
               </article>
             ))
           ) : (

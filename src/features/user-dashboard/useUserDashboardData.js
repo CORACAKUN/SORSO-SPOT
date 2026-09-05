@@ -123,6 +123,11 @@ const fallbackAccommodations = [
   },
 ];
 
+const defaultSiteSettings = {
+  reviews_enabled: 'true',
+  submissions_enabled: 'true',
+};
+
 export function useUserDashboardData(user) {
   const [destinations, setDestinations] = useState(fallbackDestinations);
   const [accommodations, setAccommodations] = useState(fallbackAccommodations);
@@ -131,6 +136,7 @@ export function useUserDashboardData(user) {
   const [reviews, setReviews] = useState([]);
   const [approvedReviews, setApprovedReviews] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [siteSettings, setSiteSettings] = useState(defaultSiteSettings);
   const [travelPlans, setTravelPlans] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -196,6 +202,7 @@ export function useUserDashboardData(user) {
       reviewsResult,
       approvedReviewsResult,
       submissionsResult,
+      settingsResult,
       travelPlansResult,
     ] =
       await Promise.all([
@@ -239,6 +246,10 @@ export function useUserDashboardData(user) {
           .eq('submitter_email', user.email)
           .order('submitted_at', { ascending: false }),
         supabase
+          .from('site_settings')
+          .select('key, value')
+          .in('key', ['reviews_enabled', 'submissions_enabled']),
+        supabase
           .from('travel_plans')
           .select('id, day, destination_slug, notes, sort_order, created_at')
           .eq('user_email', user.email)
@@ -255,6 +266,15 @@ export function useUserDashboardData(user) {
     setReviews(reviewsResult.data || []);
     setApprovedReviews(approvedReviewsResult.data || []);
     setSubmissions(submissionsResult.data || []);
+    setSiteSettings(
+      (settingsResult.data || []).reduce(
+        (settings, item) => ({
+          ...settings,
+          [item.key]: item.value,
+        }),
+        defaultSiteSettings,
+      ),
+    );
     setTravelPlans(travelPlansResult.data || []);
 
     const firstError =
@@ -265,6 +285,7 @@ export function useUserDashboardData(user) {
       reviewsResult.error ||
       approvedReviewsResult.error ||
       submissionsResult.error ||
+      settingsResult.error ||
       travelPlansResult.error;
 
     if (firstError) {
@@ -468,6 +489,7 @@ export function useUserDashboardData(user) {
     savedDestinationSlugs,
     savedDestinations,
     setMessage,
+    siteSettings,
     submissions,
     toggleAccommodationFavorite,
     toggleFavorite,

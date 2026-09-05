@@ -4,6 +4,7 @@ import ShellCard from '../../../components/shared/ShellCard.jsx';
 import { supabase } from '../../../lib/supabaseClient';
 
 const roles = ['user', 'admin'];
+const roleFilters = ['all', 'admin', 'user'];
 
 export default function UsersManager() {
   const [profiles, setProfiles] = useState([]);
@@ -11,16 +12,22 @@ export default function UsersManager() {
   const [updatingId, setUpdatingId] = useState(null);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
 
   const filteredProfiles = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return profiles;
-    return profiles.filter((profile) =>
-      [profile.display_name, profile.role, profile.home_city, profile.id]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query)),
-    );
-  }, [profiles, search]);
+    return profiles.filter((profile) => {
+      const normalizedRole = profile.role || 'user';
+      const matchesRole = roleFilter === 'all' || normalizedRole === roleFilter;
+      const matchesSearch =
+        !query ||
+        [profile.display_name, profile.role, profile.home_city, profile.id]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query));
+
+      return matchesRole && matchesSearch;
+    });
+  }, [profiles, roleFilter, search]);
 
   async function loadProfiles() {
     if (!supabase) return;
@@ -96,6 +103,17 @@ export default function UsersManager() {
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sea focus:ring-2 focus:ring-sea/20 md:w-72" onChange={(event) => setSearch(event.target.value)} placeholder="Search users" type="search" value={search} />
+            <select
+              className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-ink outline-none focus:border-sea focus:ring-2 focus:ring-sea/20"
+              onChange={(event) => setRoleFilter(event.target.value)}
+              value={roleFilter}
+            >
+              {roleFilters.map((role) => (
+                <option key={role} value={role}>
+                  {role === 'all' ? 'All roles' : role}
+                </option>
+              ))}
+            </select>
             <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-extrabold text-ink" disabled={isLoading} onClick={loadProfiles} type="button">
               <FaRedoAlt aria-hidden="true" />
               Refresh
@@ -133,7 +151,7 @@ export default function UsersManager() {
                 </article>
               ))
             ) : (
-              <p className="p-4 text-sm font-semibold text-slate-500">No users found.</p>
+              <p className="p-4 text-sm font-semibold text-slate-500">No users match the current filters.</p>
             )}
           </div>
         </div>
