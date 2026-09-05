@@ -290,6 +290,12 @@ alter column is_published set default true;
 alter table public.transport_routes
 alter column is_published set default true;
 
+insert into public.site_settings (key, value, description)
+values
+  ('reviews_enabled', 'true', 'Allow travelers to submit destination reviews.'),
+  ('submissions_enabled', 'true', 'Allow travelers to suggest places, routes, stays, and activities.')
+on conflict (key) do nothing;
+
 alter table public.submissions enable row level security;
 alter table public.reviews enable row level security;
 alter table public.destinations enable row level security;
